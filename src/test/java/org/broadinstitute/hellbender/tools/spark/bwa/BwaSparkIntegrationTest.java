@@ -2,6 +2,7 @@ package org.broadinstitute.hellbender.tools.spark.bwa;
 
 import org.broadinstitute.hellbender.CommandLineProgramTest;
 import org.broadinstitute.hellbender.utils.test.ArgumentsBuilder;
+import org.broadinstitute.hellbender.utils.test.SamAssertionUtils;
 import org.testng.annotations.Test;
 
 import java.io.File;
@@ -15,6 +16,8 @@ public final class BwaSparkIntegrationTest extends CommandLineProgramTest {
 
     @Test
     public void test() throws Exception {
+        final File expectedSam = new File(getTestDataDir(), "bwa.sam");
+
         final File ref = new File("/Users/tom/workspace/jbwa/test/ref.fa");
         final File fq1 = new File("/Users/tom/workspace/jbwa/test/R1.fq");
         final File fq2 = new File("/Users/tom/workspace/jbwa/test/R1.fq");
@@ -26,6 +29,8 @@ public final class BwaSparkIntegrationTest extends CommandLineProgramTest {
         args.add("numReducers=1");
         args.addOutput(output);
         this.runCommandLine(args.getArgsArray());
+
+        SamAssertionUtils.assertSamsEqual(output, expectedSam);
     }
 
 }

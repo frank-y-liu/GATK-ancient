@@ -89,6 +89,7 @@ public final class BwaSpark extends GATKSparkTool {
                 return Arrays.asList(alignments);
             });
 
+            // TODO: is there a better way to build a header?
             final SAMSequenceDictionary sequences = makeSequenceDictionary(new File(ref));
             final SAMFileHeader readsHeader = new SAMFileHeader();
             readsHeader.setSequenceDictionary(sequences);
