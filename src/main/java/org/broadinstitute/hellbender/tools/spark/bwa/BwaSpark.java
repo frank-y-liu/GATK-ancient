@@ -11,6 +11,8 @@ import org.broadinstitute.hellbender.exceptions.GATKException;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
 @CommandLineProgramProperties(summary = "Runs BWA",
         oneLineSummary = "BWA on Spark",
@@ -23,9 +25,13 @@ public final class BwaSpark extends GATKSparkTool {
             fullName = "ref", optional = false)
     private String ref;
 
-    @Argument(doc = "the input fasta", shortName = "fasta",
-            fullName = "fasta", optional = false)
-    private String fasta;
+    @Argument(doc = "fastq 1", shortName = "fq1",
+            fullName = "fq1", optional = false)
+    private String fq1;
+
+    @Argument(doc = "fastq 2", shortName = "fq2",
+            fullName = "fq2", optional = false)
+    private String fq2;
 
     @Argument(doc = "the output bam", shortName = StandardArgumentDefinitions.OUTPUT_SHORT_NAME,
             fullName = StandardArgumentDefinitions.OUTPUT_LONG_NAME, optional = false)
@@ -38,26 +44,32 @@ public final class BwaSpark extends GATKSparkTool {
         try {
             BwaIndex index = new BwaIndex(new File(ref));
             BwaMem mem = new BwaMem(index);
-            KSeq kseq = new KSeq(new File(fasta));
+            KSeq kseq1=new KSeq(new File(fq1));
+            KSeq kseq2=new KSeq(new File(fq2));
 
-            ShortRead read;
-            while((read=kseq.next())!=null)
+            List<ShortRead> L1=new ArrayList<ShortRead>();
+            List<ShortRead> L2=new ArrayList<ShortRead>();
+            for(;;)
             {
-                for(AlnRgn a: mem.align(read))
+                ShortRead read1=kseq1.next();
+                ShortRead read2=kseq2.next();
+
+                if(read1==null || read2==null || L1.size()>100)
                 {
-                    if(a.getSecondary()>=0) continue;
-                    System.out.println(
-                            read.getName()+"\t"+
-                                    a.getStrand()+"\t"+
-                                    a.getChrom()+"\t"+
-                                    a.getPos()+"\t"+
-                                    a.getMQual()+"\t"+
-                                    a.getCigar()+"\t"+
-                                    a.getNm()
-                    );
+                    if(!L1.isEmpty())
+                        for(String sam:mem.align(L1,L2))
+                        {
+                            System.out.print(sam);
+                        }
+                    if(read1==null || read2==null) break;
+                    L1.clear();
+                    L2.clear();
                 }
+                L1.add(read1);
+                L2.add(read2);
             }
-            kseq.dispose();
+            kseq1.dispose();
+            kseq2.dispose();
             index.close();
             mem.dispose();
         } catch (IOException e) {
