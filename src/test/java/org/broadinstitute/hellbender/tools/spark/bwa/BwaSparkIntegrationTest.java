@@ -23,6 +23,7 @@ public final class BwaSparkIntegrationTest extends CommandLineProgramTest {
         args.addFileArgument("ref", ref);
         args.addFileArgument("fq1", fq1);
         args.addFileArgument("fq2", fq2);
+        args.add("numReducers=1");
         args.addOutput(output);
         this.runCommandLine(args.getArgsArray());
     }
