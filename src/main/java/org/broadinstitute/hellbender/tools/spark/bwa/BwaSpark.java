@@ -57,7 +57,7 @@ public final class BwaSpark extends GATKSparkTool {
 
     @Override
     protected void runTool(final JavaSparkContext ctx) {
-        System.loadLibrary("bwajni");
+        System.loadLibrary("bwajni"); // TODO: need to call this once per partition
         try {
 
             JavaPairRDD<Text, SequencedFragment> fragments1 = ctx.newAPIHadoopFile(
