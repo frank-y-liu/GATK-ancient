@@ -1,6 +1,6 @@
 package org.broadinstitute.hellbender.tools.spark.bwa;
 
-import com.github.lindenb.jbwa.jni.BwaIndex;
+import com.github.lindenb.jbwa.jni.*;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.broadinstitute.hellbender.cmdline.Argument;
 import org.broadinstitute.hellbender.cmdline.CommandLineProgramProperties;
@@ -19,6 +19,10 @@ public final class BwaSpark extends GATKSparkTool {
 
     private static final long serialVersionUID = 1L;
 
+    @Argument(doc = "the reference", shortName = "ref",
+            fullName = "ref", optional = false)
+    private String ref;
+
     @Argument(doc = "the input fasta", shortName = "fasta",
             fullName = "fasta", optional = false)
     private String fasta;
@@ -32,7 +36,30 @@ public final class BwaSpark extends GATKSparkTool {
         System.out.println("hello");
         System.loadLibrary("bwajni");
         try {
-            BwaIndex index = new BwaIndex(new File(fasta));
+            BwaIndex index = new BwaIndex(new File(ref));
+            BwaMem mem = new BwaMem(index);
+            KSeq kseq = new KSeq(new File(fasta));
+
+            ShortRead read;
+            while((read=kseq.next())!=null)
+            {
+                for(AlnRgn a: mem.align(read))
+                {
+                    if(a.getSecondary()>=0) continue;
+                    System.out.println(
+                            read.getName()+"\t"+
+                                    a.getStrand()+"\t"+
+                                    a.getChrom()+"\t"+
+                                    a.getPos()+"\t"+
+                                    a.getMQual()+"\t"+
+                                    a.getCigar()+"\t"+
+                                    a.getNm()
+                    );
+                }
+            }
+            kseq.dispose();
+            index.close();
+            mem.dispose();
         } catch (IOException e) {
             throw new GATKException(e.toString());
         }
