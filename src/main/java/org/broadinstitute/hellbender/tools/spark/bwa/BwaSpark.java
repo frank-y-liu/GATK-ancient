@@ -57,7 +57,6 @@ public final class BwaSpark extends GATKSparkTool {
 
     @Override
     protected void runTool(final JavaSparkContext ctx) {
-        System.out.println("hello");
         System.loadLibrary("bwajni");
         try {
 
