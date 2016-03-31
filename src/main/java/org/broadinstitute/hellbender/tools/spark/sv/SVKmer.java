@@ -1,5 +1,8 @@
 package org.broadinstitute.hellbender.tools.spark.sv;
 
+import com.esotericsoftware.kryo.Kryo;
+import org.apache.spark.serializer.KryoRegistrator;
+import org.broadinstitute.hellbender.engine.spark.GATKRegistrator;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.tools.spark.utils.HopscotchHashSet;
 import org.broadinstitute.hellbender.utils.BaseUtils;
@@ -133,7 +136,15 @@ public class SVKmer implements Comparable<SVKmer>, Serializable {
     }
 
     @Override
-    public final int hashCode() { return (int)(valHigh ^ (valHigh >> 32) ^ valLow ^ (valLow >> 32)); }
+    public final int hashCode() {
+        final int mult = 1103515245;
+        int result = 12345;
+        result = mult * result + (int)(valHigh >> 32);
+        result = mult * result + (int)valHigh;
+        result = mult * result + (int)(valLow >> 32);
+        result = mult * result + (int)valLow;
+        return mult * result;
+    }
 
     /**
      * SVKmer comparison is consistent with equals.
@@ -224,5 +235,13 @@ public class SVKmer implements Comparable<SVKmer>, Serializable {
             result = (result << 8) | BYTEWISE_REVERSE_COMPLEMENT[(int)val & 0xFF];
         }
         return result;
+    }
+
+    static {
+        GATKRegistrator.registerRegistrator(new KryoRegistrator(){
+            @Override public void registerClasses( final Kryo kryo ) {
+                kryo.register(SVKmer.class);
+            }
+        });
     }
 }

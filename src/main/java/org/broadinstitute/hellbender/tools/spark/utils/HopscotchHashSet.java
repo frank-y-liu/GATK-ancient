@@ -1,17 +1,24 @@
 package org.broadinstitute.hellbender.tools.spark.utils;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.KryoSerializable;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
+import com.esotericsoftware.kryo.serializers.DefaultSerializers;
 import com.google.common.annotations.VisibleForTesting;
+import org.apache.spark.serializer.KryoRegistrator;
+import org.broadinstitute.hellbender.engine.spark.GATKRegistrator;
 
-import java.io.Serializable;
+import java.io.*;
 import java.util.*;
 
 /**
- * Hash set that provides low memory overhead by using hopscotch hashing.
+ * Hash set that provides low memory overhead with a high load factor by using hopscotch hashing.
  * Also provides a special iterator type to traverse individual hash buckets.
  * (This lets you implement a multi-map on this collection by using a <K,V>-ish element type having a hashCode that
  * depends only on K.)
  */
-public final class HopscotchHashSet<T> extends AbstractSet<T> implements Serializable {
+public final class HopscotchHashSet<T> extends AbstractSet<T> implements KryoSerializable {
     private static final long serialVersionUID = 1L;
     private int capacity;
     // unused buckets contain null.  (this data structure does not support null entries.)
@@ -19,7 +26,7 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> implements Seriali
     private int size;
     private T[] buckets;
     // format of the status bytes:
-    // high bit set indicates that the bucket contains "chain head" (i.e., an entry that naturally belongs in the
+    // high bit set indicates that the bucket contains a "chain head" (i.e., an entry that naturally belongs in the
     // corresponding bucket).  high bit not set indicates a "squatter" (i.e., an entry that got placed here through the
     // collision resolution methodology).  we use Byte.MIN_VALUE (i.e., 0x80) to pick off this bit.
     // low 7 bits give the (unsigned) offset from the current entry to the next entry in the collision resolution chain.
@@ -36,6 +43,7 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> implements Seriali
             8388593, 11863279, 16777213, 23726561, 33554393, 47453111, 67108859, 94906249, 134217689, 189812507,
             268435399, 379625047, 536870909, 759250111, 1073741789, 1518500213, 2147483647
     };
+    private static final int SPREADER = 2147483477;
 
     @SuppressWarnings("unchecked")
     public HopscotchHashSet( final int capacity ) {
@@ -160,7 +168,7 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> implements Seriali
     }
 
     private int hashToIndex( final int hashVal ) {
-        return Math.floorMod(hashVal, capacity);
+        return Math.floorMod(SPREADER*hashVal, capacity);
     }
 
     private int insertIntoChain( final int bucketIndex, final int endOfChainIndex ) {
@@ -372,5 +380,42 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> implements Seriali
             }
             return index;
         }
+    }
+
+    @Override
+    public void write(Kryo kryo, Output output) {
+        boolean oldReferencesState = kryo.getReferences();
+        kryo.setReferences(false);
+        output.writeInt(capacity);
+        output.writeInt(size);
+        for ( int idx = 0; idx != capacity; ++idx ) {
+            if ( isChainHead(idx) ) kryo.writeClassAndObject(output, buckets[idx]);
+        }
+        for ( int idx = 0; idx != capacity; ++idx ) {
+            final T val = buckets[idx];
+            if ( val != null && !isChainHead(idx) ) kryo.writeClassAndObject(output, val);
+        }
+        kryo.setReferences(oldReferencesState);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public void read(Kryo kryo, Input input) {
+        boolean oldReferencesState = kryo.getReferences();
+        kryo.setReferences(false);
+        capacity = input.readInt();
+        size = 0;
+        buckets = (T[])new Object[capacity];
+        status = new byte[capacity];
+        int size = input.readInt();
+        while ( size-- > 0 ) {
+            add((T)kryo.readClassAndObject(input));
+        }
+        kryo.setReferences(oldReferencesState);
+    }
+
+    static {
+        GATKRegistrator.registerRegistrator(kryo ->
+                kryo.register(HopscotchHashSet.class, new DefaultSerializers.KryoSerializableSerializer()));
     }
 }

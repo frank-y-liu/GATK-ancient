@@ -9,12 +9,20 @@ import org.bdgenomics.adam.serialization.ADAMKryoRegistrator;
 import org.broadinstitute.hellbender.utils.read.SAMRecordToGATKReadAdapter;
 
 import java.util.Collections;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.function.Function;
 
 /**
  * GATKRegistrator registers Serializers for our project. We need a JsonSerializer for the Google Genomics classes
  * and UnmodifiableCollectionsSerializer from a bug in the version of Kryo we're on.
  */
 public class GATKRegistrator implements KryoRegistrator {
+    private static final List<KryoRegistrator> otherRegistrators = new LinkedList<>();
+
+    public static void registerRegistrator( final KryoRegistrator registrator ) {
+        otherRegistrators.add(registrator);
+    }
 
     private ADAMKryoRegistrator ADAMregistrator;
 
@@ -61,5 +69,9 @@ public class GATKRegistrator implements KryoRegistrator {
         //     TargetSet
         //     ZippedTargetSet
         ADAMregistrator.registerClasses(kryo);
+
+        for ( final KryoRegistrator registrator : otherRegistrators ) {
+            registrator.registerClasses(kryo);
+        }
     }
 }
