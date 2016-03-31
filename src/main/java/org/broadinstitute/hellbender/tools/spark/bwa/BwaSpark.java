@@ -8,6 +8,7 @@ import htsjdk.samtools.reference.ReferenceSequence;
 import htsjdk.samtools.reference.ReferenceSequenceFile;
 import htsjdk.samtools.reference.ReferenceSequenceFileFactory;
 import htsjdk.samtools.util.StringUtil;
+import org.apache.commons.collections4.iterators.IteratorIterable;
 import org.apache.hadoop.io.Text;
 import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
@@ -57,9 +58,8 @@ public final class BwaSpark extends GATKSparkTool {
 
     @Override
     protected void runTool(final JavaSparkContext ctx) {
-        System.loadLibrary("bwajni"); // TODO: need to call this once per partition
+        System.loadLibrary("bwajni");
         try {
-
             JavaPairRDD<Text, SequencedFragment> fragments1 = ctx.newAPIHadoopFile(
                     fq1, FastqInputFormat.class, Text.class, SequencedFragment.class,
                     ctx.hadoopConfiguration());
@@ -71,6 +71,12 @@ public final class BwaSpark extends GATKSparkTool {
             // are identical. If this is not true we'd need to do a shuffle, or use an interleaved FASTQ
             // (and then extend FastqInputFormat to keep pairs together).
             JavaPairRDD<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>> fragmentPairs = fragments1.zip(fragments2);
+
+            // Load native library in each task VM
+            fragmentPairs = fragmentPairs.mapPartitionsToPair(pairIterator -> {
+                System.loadLibrary("bwajni");
+                return new IteratorIterable<>(pairIterator);
+            });
 
             BwaIndex index = new BwaIndex(new File(ref));
             BwaMem mem = new BwaMem(index);
