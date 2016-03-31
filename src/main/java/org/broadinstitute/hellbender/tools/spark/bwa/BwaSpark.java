@@ -1,6 +1,8 @@
 package org.broadinstitute.hellbender.tools.spark.bwa;
 
-import com.github.lindenb.jbwa.jni.*;
+import com.github.lindenb.jbwa.jni.BwaIndex;
+import com.github.lindenb.jbwa.jni.BwaMem;
+import com.github.lindenb.jbwa.jni.ShortRead;
 import htsjdk.samtools.*;
 import htsjdk.samtools.reference.ReferenceSequence;
 import htsjdk.samtools.reference.ReferenceSequenceFile;
@@ -16,11 +18,9 @@ import org.broadinstitute.hellbender.cmdline.CommandLineProgramProperties;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
 import org.broadinstitute.hellbender.cmdline.programgroups.SparkProgramGroup;
 import org.broadinstitute.hellbender.engine.spark.GATKSparkTool;
-import org.broadinstitute.hellbender.engine.spark.datasources.ReadsSparkSink;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
-import org.broadinstitute.hellbender.utils.read.ReadsWriteFormat;
 import org.broadinstitute.hellbender.utils.read.SAMRecordToGATKReadAdapter;
 import org.seqdoop.hadoop_bam.FastqInputFormat;
 import org.seqdoop.hadoop_bam.SequencedFragment;
@@ -78,11 +78,13 @@ public final class BwaSpark extends GATKSparkTool {
             final Broadcast<BwaMem> memBroadcast = ctx.broadcast(mem); // TODO: does this work with native code?
 
             JavaRDD<String> samLines = fragmentPairs.flatMap(p -> {
+                String name1 = pairedEndPrefix(p._1._1.toString());
+                String name2 = pairedEndPrefix(p._2._1.toString());
                 ShortRead[] reads1 = new ShortRead[] {
-                        new ShortRead(p._1._1.toString(), p._1._2.getSequence().copyBytes(), p._1._2.getQuality().copyBytes())
+                        new ShortRead(name1, p._1._2.getSequence().copyBytes(), p._1._2.getQuality().copyBytes())
                 };
                 ShortRead[] reads2 = new ShortRead[] {
-                        new ShortRead(p._2._1.toString(), p._2._2.getSequence().copyBytes(), p._2._2.getQuality().copyBytes())
+                        new ShortRead(name2, p._2._2.getSequence().copyBytes(), p._2._2.getQuality().copyBytes())
                 };
                 String[] alignments = memBroadcast.getValue().align(reads1, reads2);
                 return Arrays.asList(alignments);
@@ -98,15 +100,26 @@ public final class BwaSpark extends GATKSparkTool {
 
             JavaRDD<GATKRead> reads = samLines.map(r -> new SAMRecordToGATKReadAdapter(samLineParserBroadcast.getValue().parseLine(r)));
 
-            ReadsSparkSink.writeReads(ctx, output, null,
-                    reads, readsHeader, shardedOutput ? ReadsWriteFormat.SHARDED : ReadsWriteFormat.SINGLE,
-                    getRecommendedNumReducers());
+//            ReadsSparkSink.writeReads(ctx, output, null,
+//                    reads, readsHeader, shardedOutput ? ReadsWriteFormat.SHARDED : ReadsWriteFormat.SINGLE,
+//                    getRecommendedNumReducers());
+
+            SAMFileWriterFactory samFileWriterFactory = new SAMFileWriterFactory();
+            try (SAMFileWriter samFileWriter = samFileWriterFactory.makeSAMWriter(readsHeader, true, new File(output))) {
+                for (GATKRead r : reads.collect()) {
+                    samFileWriter.addAlignment(r.convertToSAMRecord(readsHeader));
+                }
+            }
 
             index.close();
             mem.dispose();
         } catch (IOException e) {
             throw new GATKException(e.toString());
         }
+    }
+
+    private static String pairedEndPrefix(String pairedEndName) {
+        return pairedEndName.substring(0, pairedEndName.length() - 2); // TODO: do something like Picard's FastqToSam#getBaseName
     }
 
     // From CreateSequenceDictionary
