@@ -3,6 +3,10 @@ package org.broadinstitute.hellbender.tools.spark.bwa;
 import com.github.lindenb.jbwa.jni.BwaIndex;
 import com.github.lindenb.jbwa.jni.BwaMem;
 import com.github.lindenb.jbwa.jni.ShortRead;
+import com.google.common.base.Function;
+import com.google.common.collect.AbstractIterator;
+import com.google.common.collect.Iterators;
+import com.google.common.collect.UnmodifiableIterator;
 import htsjdk.samtools.*;
 import htsjdk.samtools.reference.ReferenceSequence;
 import htsjdk.samtools.reference.ReferenceSequenceFile;
@@ -27,6 +31,7 @@ import org.seqdoop.hadoop_bam.FastqInputFormat;
 import org.seqdoop.hadoop_bam.SequencedFragment;
 import scala.Tuple2;
 
+import javax.annotation.Nullable;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
@@ -83,18 +88,20 @@ public final class BwaSpark extends GATKSparkTool {
 
             final Broadcast<BwaMem> memBroadcast = ctx.broadcast(mem); // TODO: does this work with native code?
 
-            JavaRDD<String> samLines = fragmentPairs.flatMap(p -> {
-                String name1 = pairedEndPrefix(p._1._1.toString());
-                String name2 = pairedEndPrefix(p._2._1.toString());
-                ShortRead[] reads1 = new ShortRead[] {
-                        new ShortRead(name1, p._1._2.getSequence().copyBytes(), p._1._2.getQuality().copyBytes())
-                };
-                ShortRead[] reads2 = new ShortRead[] {
-                        new ShortRead(name2, p._2._2.getSequence().copyBytes(), p._2._2.getQuality().copyBytes())
-                };
-                String[] alignments = memBroadcast.getValue().align(reads1, reads2);
-                return Arrays.asList(alignments);
-            });
+//            JavaRDD<String> samLines = fragmentPairs.flatMap(p -> {
+//                String name1 = pairedEndPrefix(p._1._1.toString());
+//                String name2 = pairedEndPrefix(p._2._1.toString());
+//                ShortRead[] reads1 = new ShortRead[] {
+//                        new ShortRead(name1, p._1._2.getSequence().copyBytes(), p._1._2.getQuality().copyBytes())
+//                };
+//                ShortRead[] reads2 = new ShortRead[] {
+//                        new ShortRead(name2, p._2._2.getSequence().copyBytes(), p._2._2.getQuality().copyBytes())
+//                };
+//                String[] alignments = memBroadcast.getValue().align(reads1, reads2);
+//                return Arrays.asList(alignments);
+//            });
+
+            JavaRDD<String> samLines = fragmentPairs.mapPartitions(iter -> () -> concat(batchIterator(memBroadcast, iter)));
 
             // TODO: is there a better way to build a header?
             final SAMSequenceDictionary sequences = makeSequenceDictionary(new File(ref));
@@ -122,6 +129,50 @@ public final class BwaSpark extends GATKSparkTool {
         } catch (IOException e) {
             throw new GATKException(e.toString());
         }
+    }
+
+    private Iterator<List<String>> batchIterator(final Broadcast<BwaMem> memBroadcast, Iterator<Tuple2<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>>> iter) {
+        UnmodifiableIterator<List<Tuple2<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>>>> batches = Iterators.partition(iter, 50);
+        Iterator<List<String>> it = Iterators.transform(batches, new Function<List<Tuple2<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>>>, List<String>>() {
+            @Nullable
+            @Override
+            public List<String> apply(@Nullable List<Tuple2<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>>> input) {
+                List<ShortRead> reads1 = new ArrayList<>();
+                List<ShortRead> reads2 = new ArrayList<>();
+                for (Tuple2<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>> p : input) {
+                    String name1 = pairedEndPrefix(p._1._1.toString());
+                    String name2 = pairedEndPrefix(p._2._1.toString());
+                    reads1.add(new ShortRead(name1, p._1._2.getSequence().copyBytes(), p._1._2.getQuality().copyBytes()));
+                    reads2.add(new ShortRead(name2, p._2._2.getSequence().copyBytes(), p._2._2.getQuality().copyBytes()));
+                }
+                try {
+                    String[] alignments = memBroadcast.getValue().align(reads1, reads2);
+                    return Arrays.asList(alignments);
+                } catch (IOException e) {
+                    throw new GATKException(e.toString());
+                }
+            }
+        });
+        return it;
+    }
+
+    static <T> Iterator<T> concat(Iterator<? extends Iterable<T>> iterator) {
+        return new AbstractIterator<T>() {
+            Iterator<T> subIterator;
+            @Override
+            protected T computeNext() {
+                if (subIterator != null && subIterator.hasNext()) {
+                    return subIterator.next();
+                }
+                while (iterator.hasNext()) {
+                    subIterator = iterator.next().iterator();
+                    if (subIterator.hasNext()) {
+                        return subIterator.next();
+                    }
+                }
+                return endOfData();
+            }
+        };
     }
 
     private static String pairedEndPrefix(String pairedEndName) {

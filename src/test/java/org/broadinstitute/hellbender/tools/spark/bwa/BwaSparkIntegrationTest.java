@@ -21,7 +21,7 @@ public final class BwaSparkIntegrationTest extends CommandLineProgramTest {
         final File ref = new File("/Users/tom/workspace/jbwa/test/ref.fa");
         final File fq1 = new File("/Users/tom/workspace/jbwa/test/R1.fq");
         final File fq2 = new File("/Users/tom/workspace/jbwa/test/R1.fq");
-        final File output = createTempFile("bwa", ".bam");
+        final File output = new File("/tmp/bwa.sam"); //createTempFile("bwa", ".bam");
         ArgumentsBuilder args = new ArgumentsBuilder();
         args.addFileArgument("ref", ref);
         args.addFileArgument("fq1", fq1);
