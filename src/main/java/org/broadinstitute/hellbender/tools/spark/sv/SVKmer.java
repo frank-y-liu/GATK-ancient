@@ -238,10 +238,6 @@ public class SVKmer implements Comparable<SVKmer>, Serializable {
     }
 
     static {
-        GATKRegistrator.registerRegistrator(new KryoRegistrator(){
-            @Override public void registerClasses( final Kryo kryo ) {
-                kryo.register(SVKmer.class);
-            }
-        });
+        GATKRegistrator.registerRegistrator(kryo -> kryo.register(SVKmer.class));
     }
 }

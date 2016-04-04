@@ -1,7 +1,6 @@
 package org.broadinstitute.hellbender.tools.spark.sv;
 
 import com.google.cloud.dataflow.sdk.options.PipelineOptions;
-import com.google.cloud.dataflow.sdk.transforms.SerializableComparator;
 import com.google.common.annotations.VisibleForTesting;
 import htsjdk.samtools.*;
 import htsjdk.samtools.fastq.FastqRecord;
@@ -29,7 +28,6 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * Tool to describe reads that support a hypothesis of a genomic breakpoint.
@@ -63,8 +61,6 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
     @Argument(doc = "file containing ubiquitous kmer list", fullName = "kmersToIgnore", optional = false)
     private String kmersToIgnoreFilename;
 
-    private int nIntervals;
-
     @Override
     public boolean requiresReads()
     {
@@ -85,10 +81,17 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
             .filter(read ->
                     !read.isSecondaryAlignment() && !read.isSupplementaryAlignment() &&
                             !read.isDuplicate() && !read.failsVendorQualityCheck())
-            .mapPartitions(readItr ->
+            .mapPartitionsToPair(readItr ->
                     new MapPartitioner<>(readItr, new ReadsForIntervalFinder(broadcastKmerAndIntervals.value())), false)
-            .repartition(nIntervals)
-            .saveAsTextFile(outputDir);
+            .groupByKey()
+            .foreach(intervalReads -> writeFastq(intervalReads,outputDir));
+    }
+
+    private void writeFastq( final Tuple2<Integer,Iterable<FastqRecord>> intervalReads, final String outputDir ) {
+        final File fastqName = new File(outputDir, "assembly" + intervalReads._1 + ".fastq");
+        try ( final FastqWriter writer = new FastqWriterFactory().newWriter(fastqName) ) {
+            intervalReads._2.forEach(writer::write);
+        }
     }
 
     private List<KmerAndInterval> getKmerIntervals( final JavaSparkContext ctx ) {
@@ -110,8 +113,7 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
         broadcastQNameAndIntervals.destroy();
         broadcastKmerKillList.destroy();
 
-        nIntervals = kmerIntervals.size();
-        System.out.println(dateFormatter.format(System.currentTimeMillis())+" Discovered "+nIntervals+" kmers.");
+        System.out.println(dateFormatter.format(System.currentTimeMillis())+" Discovered "+ kmerIntervals.size() +" kmers.");
         return kmerIntervals;
     }
 
@@ -493,82 +495,39 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
     }
 
     /**
-     * Class to represent an intervalId and read data necessary to write FASTQ.
-     */
-    @VisibleForTesting static final class IntervalAndRead implements Serializable {
-        private static final long serialVersionUID = 1L;
-        private final int intervalId;
-        private final String readName;
-        private final byte[] readSeq;
-        private final byte[] readQuals;
-
-        IntervalAndRead( final int intervalId, final GATKRead read ) {
-            this.intervalId = intervalId;
-            this.readName = !read.isPaired() ? read.getName() : read.getName() + (read.isSecondOfPair() ? "/2" : "/1");
-            this.readSeq = read.getBases();
-            this.readQuals = read.getBaseQualities();
-        }
-
-        public int getIntervalId() { return intervalId; }
-        public String getReadName() { return readName; }
-        public byte[] getReadSeq() { return readSeq; }
-        public byte[] getReadQuals() { return readQuals; }
-
-        @Override
-        public int hashCode() { return intervalId; }
-
-        @Override
-        public boolean equals( final Object obj ) {
-            return obj instanceof IntervalAndRead && equals((IntervalAndRead)obj);
-        }
-
-        public boolean equals( final IntervalAndRead that ) {
-            return this.intervalId == that.intervalId && this.readName == that.readName;
-        }
-
-        @Override
-        public String toString() {
-            return "@"+intervalId+":"+readName+"\n"+
-                    new String(readSeq)+"\n"+
-                    "+\n"+
-                    SAMUtils.phredToFastq(readQuals);
-        }
-    }
-
-    /**
      * Class that acts as a mapper from a stream of reads to a stream of <intervalId,read> pairs.
      * It knows which breakpoint(s) a read belongs to (if any) by kmerizing the read, and looking up each SVKmer in
-     * a multi-map of SVKmers onto breakpoints.
+     * a multi-map of SVKmers onto intervalIds.
      */
     @VisibleForTesting static final class ReadsForIntervalFinder
-            implements Function<GATKRead, Iterator<IntervalAndRead>> {
+            implements Function<GATKRead, Iterator<Tuple2<Integer,FastqRecord>>> {
         private final HopscotchHashSet<KmerAndInterval> kmerAndIntervalSet;
+        private Set<Integer> intervalIds = new HashSet<>();
+        private List<Tuple2<Integer, FastqRecord>> tuples = new ArrayList<>();
 
-        ReadsForIntervalFinder(final HopscotchHashSet<KmerAndInterval> kmerAndIntervalSet ) {
+        ReadsForIntervalFinder(final HopscotchHashSet<KmerAndInterval> kmerAndIntervalSet) {
             this.kmerAndIntervalSet = kmerAndIntervalSet;
         }
 
-        public Iterator<IntervalAndRead> apply( final GATKRead read ) {
-            final Set<Integer> intervalIds = SVKmerizer.stream(read.getBases(), SVConstants.KMER_SIZE)
-                    .map(kmer -> kmer.canonical(SVConstants.KMER_SIZE))
-                    .flatMap(this::kmerToIntervals)
-                    .collect(Collectors.toCollection(HashSet::new));
-            final int nBreakpoints = intervalIds.size();
-            return intervalIds
-                    .stream()
-                    .map(intervalId -> new IntervalAndRead(intervalId, read))
-                    .collect(Collectors.toCollection(() -> new ArrayList<>(nBreakpoints)))
-                    .iterator();
-        }
-
-        private Stream<Integer> kmerToIntervals(final SVKmer kmer ) {
-            List<Integer> intervalIds = new ArrayList<>(2);
-            Iterator<KmerAndInterval> itr = kmerAndIntervalSet.bucketIterator(kmer.hashCode());
-            while ( itr.hasNext() ) {
-                final KmerAndInterval kmerAndInterval = itr.next();
-                if ( kmer.equals(kmerAndInterval) ) intervalIds.add(kmerAndInterval.getIntervalId());
-            }
-            return intervalIds.stream();
+        public Iterator<Tuple2<Integer, FastqRecord>> apply(final GATKRead read) {
+            intervalIds.clear();
+            SVKmerizer.stream(read.getBases(), SVConstants.KMER_SIZE)
+                    .map( kmer -> kmer.canonical(SVConstants.KMER_SIZE) )
+                    .forEach( kmer -> {
+                        Iterator<KmerAndInterval> itr = kmerAndIntervalSet.bucketIterator(kmer.hashCode());
+                        while ( itr.hasNext() ) {
+                            KmerAndInterval kmerAndInterval = itr.next();
+                            if (kmer.equals(kmerAndInterval)) intervalIds.add(kmerAndInterval.getIntervalId());
+                        }
+                    });
+            if (intervalIds.isEmpty()) return Collections.emptyIterator();
+            tuples.clear();
+            String readName = read.getName();
+            if ( read.isPaired() ) readName += read.isFirstOfPair() ? "/1" : "/2";
+            FastqRecord fastqRecord =
+                    new FastqRecord(readName, read.getBasesString(), null, ReadUtils.getBaseQualityString(read));
+            intervalIds.stream().forEach(intervalId -> tuples.add(new Tuple2<>(intervalId, fastqRecord)));
+            return tuples.iterator();
         }
     }
 

@@ -43,7 +43,7 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> implements KryoSer
             8388593, 11863279, 16777213, 23726561, 33554393, 47453111, 67108859, 94906249, 134217689, 189812507,
             268435399, 379625047, 536870909, 759250111, 1073741789, 1518500213, 2147483647
     };
-    private static final int SPREADER = 2147483477;
+    private static final int SPREADER = 241;
 
     @SuppressWarnings("unchecked")
     public HopscotchHashSet( final int capacity ) {
@@ -62,9 +62,13 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> implements KryoSer
     @Override
     public boolean contains( final Object value ) {
         if ( value == null ) return false;
-        final Iterator<T> itr = bucketIterator(value.hashCode());
-        while ( itr.hasNext() ) {
-            if ( itr.next().equals(value) ) return true;
+        int bucketIndex = hashToIndex(value.hashCode());
+        if ( !isChainHead(bucketIndex) ) return false;
+        if ( buckets[bucketIndex].equals(value) ) return true;
+        int offset;
+        while ( (offset = getOffset(bucketIndex)) != 0 ) {
+            bucketIndex = getIndex(bucketIndex, offset);
+            if ( buckets[bucketIndex].equals(value) ) return true;
         }
         return false;
     }
