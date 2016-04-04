@@ -6,10 +6,8 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.serializers.DefaultSerializers;
 import com.google.common.annotations.VisibleForTesting;
-import org.apache.spark.serializer.KryoRegistrator;
 import org.broadinstitute.hellbender.engine.spark.GATKRegistrator;
 
-import java.io.*;
 import java.util.*;
 
 /**

@@ -5,7 +5,7 @@ import org.broadinstitute.hellbender.tools.spark.sv.SVUtils;
 import java.util.*;
 
 /**
- * Created by tsharpe on 4/1/16.
+ * Timing tests for HopscotchHashSet.
  */
 public final class HopscotchHashTimingTest {
 
