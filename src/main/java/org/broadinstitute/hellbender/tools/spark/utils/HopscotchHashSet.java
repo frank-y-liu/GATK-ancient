@@ -13,13 +13,17 @@ import java.io.*;
 import java.util.*;
 
 /**
- * Hash set that provides low memory overhead with a high load factor by using hopscotch hashing.
- * Also provides a special iterator type to traverse individual hash buckets.
- * (This lets you implement a multi-map on this collection by using a <K,V>-ish element type having a hashCode that
- * depends only on K.)
+ * Hash set implementation that provides low memory overhead with a high load factor by using the hopscotch algorithm.
+ * This is usually a little slower than the JDK's HashSet (neglecting GC time), but it uses much less memory.
+ * It's probably a nice choice for very large collections.
+ * You can make it pretty much equally fast as HashSet by replacing the prime-number table sizing with power-of-2 table
+ * sizing, but then it'll behave just as badly as HashSet given crappy hashCode implementations.
  */
 public final class HopscotchHashSet<T> extends AbstractSet<T> implements KryoSerializable {
     private static final long serialVersionUID = 1L;
+    // For power-of-2 table sizes add this line
+    //private static final int maxCapacity = Integer.MAX_VALUE/2 + 1;
+
     private int capacity;
     // unused buckets contain null.  (this data structure does not support null entries.)
     // if the bucket is unused, the corresponding status byte is irrelevant, but is always set to 0.
@@ -79,6 +83,11 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> implements KryoSer
     @Override
     public Iterator<T> iterator() { return new CompleteIterator(); }
 
+    /**
+     * This special iterator type allows you to traverse individual hash buckets.
+     * This lets you implement a multi-map on this collection by using a <K,V>-ish element type having a hashCode that
+     * depends only on K.
+     */
     public Iterator<T> bucketIterator( final int hashVal ) { return new BucketIterator(hashVal); }
 
     @Override
@@ -172,6 +181,8 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> implements KryoSer
     }
 
     private int hashToIndex( final int hashVal ) {
+        // For power-of-2 table sizes substitute this line
+        // return (SPREADER*hashVal)&(capacity-1);
         return Math.floorMod(SPREADER*hashVal, capacity);
     }
 
@@ -324,7 +335,18 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> implements KryoSer
         }
     }
 
-    private static int computeCapacity( final int size ) {
+    private static int computeCapacity( int size ) {
+        // For power-of-2 table sizes substitute these lines
+        /*
+        if ( size > maxCapacity ) throw new IllegalArgumentException("Table can't be that big.");
+        size = (int)(size/LOAD_FACTOR) - 1;
+        size |= size >>> 1;
+        size |= size >>> 2;
+        size |= size >>> 4;
+        size |= size >>> 8;
+        size |= size >>> 16;
+        return (size < 256) ? 256 : (size >= maxCapacity) ? maxCapacity : size + 1;
+        */
         if ( size < LOAD_FACTOR*Integer.MAX_VALUE ) {
             final int augmentedSize = (int) (size / LOAD_FACTOR);
             for ( final int legalSize : legalSizes ) {
@@ -335,6 +357,11 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> implements KryoSer
     }
 
     private static int bumpCapacity( final int capacity ) {
+        // For power-of-2 table sizes substitute these lines
+        /*
+        if ( capacity == maxCapacity ) throw new IllegalStateException("Unable to increase capacity.");
+        return capacity * 2;
+        */
         if ( capacity <= legalSizes[legalSizes.length-2] ) {
             for ( int idx = 0; idx != legalSizes.length; ++idx ) {
                 if ( legalSizes[idx] >= capacity ) return legalSizes[idx + 1];

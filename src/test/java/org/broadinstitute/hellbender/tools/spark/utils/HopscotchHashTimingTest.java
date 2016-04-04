@@ -92,5 +92,21 @@ public final class HopscotchHashTimingTest {
                     hashSet.contains(value);
             }
         }));
+
+        System.out.println("HashSet removal: "+time( () -> {
+            for (int trialId = 0; trialId != N_TRIALS; ++trialId) {
+                Set<Integer> hashSet = hashSets.get(trialId);
+                for (Integer value : trials.get(trialId))
+                    hashSet.remove(value);
+            }
+        }));
+
+        System.out.println("HopscotchHashSet removal: "+time( () -> {
+            for (int trialId = 0; trialId != N_TRIALS; ++trialId) {
+                Set<Integer> hashSet = hopscotchHashSets.get(trialId);
+                for (Integer value : trials.get(trialId))
+                    hashSet.remove(value);
+            }
+        }));
     }
 }
