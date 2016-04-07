@@ -131,8 +131,32 @@ public final class BwaSpark extends GATKSparkTool {
         }
     }
 
+    private Iterator<Tuple2<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>>> copyingIterator(Iterator<Tuple2<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>>> iter) {
+        return new AbstractIterator<Tuple2<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>>>() {
+            @Override
+            protected Tuple2<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>> computeNext() {
+                return iter.hasNext() ? copy(iter.next()) : endOfData();
+            }
+
+            private Tuple2<Tuple2<Text,SequencedFragment>,Tuple2<Text,SequencedFragment>> copy(Tuple2<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>> next) {
+                return new Tuple2<>(new Tuple2<>(copy(next._1._1), copy(next._1._2)), new Tuple2<>(copy(next._2._1), copy(next._2._2)));
+            }
+
+            private Text copy(Text text) {
+                return new Text(text);
+            }
+
+            private SequencedFragment copy(SequencedFragment frag) {
+                SequencedFragment sf = new SequencedFragment();
+                sf.setSequence(copy(frag.getSequence()));
+                sf.setQuality(copy(frag.getQuality()));
+                return sf;
+            }
+        };
+    }
+
     private Iterator<List<String>> batchIterator(final Broadcast<BwaMem> memBroadcast, Iterator<Tuple2<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>>> iter) {
-        UnmodifiableIterator<List<Tuple2<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>>>> batches = Iterators.partition(iter, 50);
+        UnmodifiableIterator<List<Tuple2<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>>>> batches = Iterators.partition(copyingIterator(iter), 50);
         Iterator<List<String>> it = Iterators.transform(batches, new Function<List<Tuple2<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>>>, List<String>>() {
             @Nullable
             @Override
