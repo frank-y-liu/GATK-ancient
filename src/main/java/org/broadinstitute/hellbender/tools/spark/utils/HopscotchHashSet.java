@@ -75,6 +75,8 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> implements KryoSer
         return false;
     }
 
+    public int capacity() { return capacity; }
+
     @Override
     public int size() { return size; }
 
