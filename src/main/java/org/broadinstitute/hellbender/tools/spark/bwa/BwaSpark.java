@@ -87,28 +87,15 @@ public final class BwaSpark extends GATKSparkTool {
             });
 
             // Load native library in each task VM
-            fragmentPairs = fragmentPairs.mapPartitionsToPair(pairIterator -> {
+            shortReadPairs = shortReadPairs.mapPartitions(p -> {
                 System.loadLibrary("bwajni");
-                return new IteratorIterable<>(pairIterator);
+                return new IteratorIterable<>(p);
             });
 
             BwaIndex index = new BwaIndex(new File(ref));
             BwaMem mem = new BwaMem(index);
 
             final Broadcast<BwaMem> memBroadcast = ctx.broadcast(mem); // TODO: does this work with native code?
-
-//            JavaRDD<String> samLines = fragmentPairs.flatMap(p -> {
-//                String name1 = pairedEndPrefix(p._1._1.toString());
-//                String name2 = pairedEndPrefix(p._2._1.toString());
-//                ShortRead[] reads1 = new ShortRead[] {
-//                        new ShortRead(name1, p._1._2.getSequence().copyBytes(), p._1._2.getQuality().copyBytes())
-//                };
-//                ShortRead[] reads2 = new ShortRead[] {
-//                        new ShortRead(name2, p._2._2.getSequence().copyBytes(), p._2._2.getQuality().copyBytes())
-//                };
-//                String[] alignments = memBroadcast.getValue().align(reads1, reads2);
-//                return Arrays.asList(alignments);
-//            });
 
             JavaRDD<String> samLines = shortReadPairs.mapPartitions(iter -> () -> concat(batchIterator(memBroadcast, iter)));
 
@@ -121,10 +108,6 @@ public final class BwaSpark extends GATKSparkTool {
             Broadcast<SAMLineParser> samLineParserBroadcast = ctx.broadcast(samLineParser);
 
             JavaRDD<GATKRead> reads = samLines.map(r -> new SAMRecordToGATKReadAdapter(samLineParserBroadcast.getValue().parseLine(r)));
-
-//            ReadsSparkSink.writeReads(ctx, output, null,
-//                    reads, readsHeader, shardedOutput ? ReadsWriteFormat.SHARDED : ReadsWriteFormat.SINGLE,
-//                    getRecommendedNumReducers());
 
             SAMFileWriterFactory samFileWriterFactory = new SAMFileWriterFactory();
             try (SAMFileWriter samFileWriter = samFileWriterFactory.makeSAMWriter(readsHeader, true, new File(output))) {
