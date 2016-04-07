@@ -73,9 +73,18 @@ public final class BwaSpark extends GATKSparkTool {
                     ctx.hadoopConfiguration());
 
             // The following assumes that partition boundaries are identical, which is only the case if the file sizes
-            // are identical. If this is not true we'd need to do a shuffle, or use an interleaved FASTQ
+            // are i
+            // dentical. If this is not true we'd need to do a shuffle, or use an interleaved FASTQ
             // (and then extend FastqInputFormat to keep pairs together).
             JavaPairRDD<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>> fragmentPairs = fragments1.zip(fragments2);
+
+            JavaRDD<Tuple2<ShortRead, ShortRead>> shortReadPairs = fragmentPairs.map(p -> {
+                String name1 = pairedEndPrefix(p._1._1.toString());
+                String name2 = pairedEndPrefix(p._2._1.toString());
+                return new Tuple2<>(
+                        new ShortRead(name1, p._1._2.getSequence().copyBytes(), p._1._2.getQuality().copyBytes()),
+                        new ShortRead(name2, p._2._2.getSequence().copyBytes(), p._2._2.getQuality().copyBytes()));
+            });
 
             // Load native library in each task VM
             fragmentPairs = fragmentPairs.mapPartitionsToPair(pairIterator -> {
@@ -101,7 +110,7 @@ public final class BwaSpark extends GATKSparkTool {
 //                return Arrays.asList(alignments);
 //            });
 
-            JavaRDD<String> samLines = fragmentPairs.mapPartitions(iter -> () -> concat(batchIterator(memBroadcast, iter)));
+            JavaRDD<String> samLines = shortReadPairs.mapPartitions(iter -> () -> concat(batchIterator(memBroadcast, iter)));
 
             // TODO: is there a better way to build a header?
             final SAMSequenceDictionary sequences = makeSequenceDictionary(new File(ref));
@@ -131,43 +140,17 @@ public final class BwaSpark extends GATKSparkTool {
         }
     }
 
-    private Iterator<Tuple2<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>>> copyingIterator(Iterator<Tuple2<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>>> iter) {
-        return new AbstractIterator<Tuple2<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>>>() {
-            @Override
-            protected Tuple2<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>> computeNext() {
-                return iter.hasNext() ? copy(iter.next()) : endOfData();
-            }
-
-            private Tuple2<Tuple2<Text,SequencedFragment>,Tuple2<Text,SequencedFragment>> copy(Tuple2<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>> next) {
-                return new Tuple2<>(new Tuple2<>(copy(next._1._1), copy(next._1._2)), new Tuple2<>(copy(next._2._1), copy(next._2._2)));
-            }
-
-            private Text copy(Text text) {
-                return new Text(text);
-            }
-
-            private SequencedFragment copy(SequencedFragment frag) {
-                SequencedFragment sf = new SequencedFragment();
-                sf.setSequence(copy(frag.getSequence()));
-                sf.setQuality(copy(frag.getQuality()));
-                return sf;
-            }
-        };
-    }
-
-    private Iterator<List<String>> batchIterator(final Broadcast<BwaMem> memBroadcast, Iterator<Tuple2<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>>> iter) {
-        UnmodifiableIterator<List<Tuple2<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>>>> batches = Iterators.partition(copyingIterator(iter), 50);
-        Iterator<List<String>> it = Iterators.transform(batches, new Function<List<Tuple2<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>>>, List<String>>() {
+    private Iterator<List<String>> batchIterator(final Broadcast<BwaMem> memBroadcast, Iterator<Tuple2<ShortRead, ShortRead>> iter) {
+        UnmodifiableIterator<List<Tuple2<ShortRead, ShortRead>>> batches = Iterators.partition(iter, 50);
+        Iterator<List<String>> it = Iterators.transform(batches, new Function<List<Tuple2<ShortRead, ShortRead>>, List<String>>() {
             @Nullable
             @Override
-            public List<String> apply(@Nullable List<Tuple2<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>>> input) {
+            public List<String> apply(@Nullable List<Tuple2<ShortRead, ShortRead>> input) {
                 List<ShortRead> reads1 = new ArrayList<>();
                 List<ShortRead> reads2 = new ArrayList<>();
-                for (Tuple2<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>> p : input) {
-                    String name1 = pairedEndPrefix(p._1._1.toString());
-                    String name2 = pairedEndPrefix(p._2._1.toString());
-                    reads1.add(new ShortRead(name1, p._1._2.getSequence().copyBytes(), p._1._2.getQuality().copyBytes()));
-                    reads2.add(new ShortRead(name2, p._2._2.getSequence().copyBytes(), p._2._2.getQuality().copyBytes()));
+                for (Tuple2<ShortRead, ShortRead> p : input) {
+                    reads1.add(p._1);
+                    reads2.add(p._2);
                 }
                 try {
                     String[] alignments = memBroadcast.getValue().align(reads1, reads2);
