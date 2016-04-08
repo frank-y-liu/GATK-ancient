@@ -1,5 +1,6 @@
 package org.broadinstitute.hellbender.tools.spark.sv;
 
+import com.google.cloud.dataflow.sdk.io.Read;
 import com.google.cloud.dataflow.sdk.options.PipelineOptions;
 import htsjdk.samtools.*;
 import htsjdk.samtools.fastq.FastqRecord;
@@ -300,16 +301,29 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
     }
 
     private int getMeanBasesPerTemplate() {
-        final Tuple2<Long,Long> readCountAndTotalLength =
-                getUnfilteredReads()
-                        .aggregate(new Tuple2<>(0L,0L),
-                                (val, read) -> new Tuple2<>(val._1+1, val._2+(read.isPaired()?2:1)*read.getLength()),
-                                (val1, val2) -> new Tuple2<>(val1._1+val2._1, val1._2+val2._2));
-        return (int)(readCountAndTotalLength._2 / readCountAndTotalLength._1);
+        return (int)getUnfilteredReads()
+                .aggregate(new ReadCountAndLength(), ReadCountAndLength::new, ReadCountAndLength::new)
+                .getMeanLength();
     }
 
     private void log( final String message ) {
         System.out.println(dateFormatter.format(System.currentTimeMillis())+message);
+    }
+
+    private static final class ReadCountAndLength {
+        private final long count;
+        private final long length;
+
+        public ReadCountAndLength() { count = 0; length = 0; }
+        public ReadCountAndLength( final ReadCountAndLength countNLength, final GATKRead read ) {
+            this.count = countNLength.count + 1;
+            this.length = countNLength.length + (read.isPaired()?2:1)*read.getLength(); }
+        public ReadCountAndLength( final ReadCountAndLength countNLength1, final ReadCountAndLength countNLength2 ) {
+            this.count = countNLength1.count + countNLength2.count;
+            this.length = countNLength1.length + countNLength2.length;
+        }
+
+        public long getMeanLength() { return count != 0 ? length/count : 0; }
     }
 
     /**
