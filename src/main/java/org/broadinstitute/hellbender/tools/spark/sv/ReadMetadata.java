@@ -17,8 +17,11 @@ public class ReadMetadata implements Serializable {
     private static final long serialVersionUID = 1L;
     private final Map<String, Short> contigNameToID;
     private final Map<String, ReadGroupFragmentStatistics> readGroupToFragmentStatistics;
+    private final int meanBasesPerTemplate;
 
-    public ReadMetadata( final SAMFileHeader header, final List<ReadGroupFragmentStatistics> statistics ) {
+    public ReadMetadata( final SAMFileHeader header,
+                         final List<ReadGroupFragmentStatistics> statistics,
+                         final int meanBasesPerTemplate ) {
         final List<SAMSequenceRecord> contigs = header.getSequenceDictionary().getSequences();
         if ( contigs.size() > Short.MAX_VALUE ) throw new GATKException("Too many reference contigs.");
         contigNameToID = new HashMap<>(SVUtils.hashMapCapacity(contigs.size()));
@@ -34,6 +37,8 @@ public class ReadMetadata implements Serializable {
         for ( int readGroupId = 0; readGroupId < nReadGroups; ++readGroupId ) {
             readGroupToFragmentStatistics.put(readGroups.get(readGroupId).getId(), statistics.get(readGroupId));
         }
+
+        this.meanBasesPerTemplate = meanBasesPerTemplate;
     }
 
     public short getContigID( final String contigName ) {
@@ -54,6 +59,8 @@ public class ReadMetadata implements Serializable {
                 .max()
                 .getAsInt();
     }
+
+    public int getMeanBasesPerTemplate() { return meanBasesPerTemplate; }
 
     public static class ReadGroupFragmentStatistics implements Serializable {
         private static final long serialVersionUID = 1L;
