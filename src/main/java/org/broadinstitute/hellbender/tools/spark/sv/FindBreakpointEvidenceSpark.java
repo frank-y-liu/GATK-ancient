@@ -310,7 +310,8 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
         System.out.println(dateFormatter.format(System.currentTimeMillis())+message);
     }
 
-    private static final class ReadCountAndLength {
+    private static final class ReadCountAndLength implements Serializable {
+        private static final long serialVersionUID = 1L;
         private final long count;
         private final long length;
 
@@ -720,9 +721,10 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
 
     static {
         GATKRegistrator.registerRegistrator(kryo -> {
-                kryo.register(Interval.class);
-                kryo.register(QNameAndInterval.class);
-                kryo.register(KmerAndInterval.class);
-            });
+            kryo.register(ReadCountAndLength.class);
+            kryo.register(Interval.class);
+            kryo.register(QNameAndInterval.class);
+            kryo.register(KmerAndInterval.class);
+        });
     }
 }
