@@ -49,41 +49,30 @@ public final class BwaSpark extends GATKSparkTool {
             fullName = "ref", optional = false)
     private String ref;
 
-    @Argument(doc = "fastq 1", shortName = "fq1",
-            fullName = "fq1", optional = false)
-    private String fq1;
-
-    @Argument(doc = "fastq 2", shortName = "fq2",
-            fullName = "fq2", optional = false)
-    private String fq2;
-
     @Argument(doc = "the output bam", shortName = StandardArgumentDefinitions.OUTPUT_SHORT_NAME,
             fullName = StandardArgumentDefinitions.OUTPUT_LONG_NAME, optional = false)
     private String output;
 
     @Override
+    public boolean requiresReads() {
+        return true;
+    }
+
+    @Override
     protected void runTool(final JavaSparkContext ctx) {
         System.loadLibrary("bwajni");
         try {
-            JavaPairRDD<Text, SequencedFragment> fragments1 = ctx.newAPIHadoopFile(
-                    fq1, FastqInputFormat.class, Text.class, SequencedFragment.class,
-                    ctx.hadoopConfiguration());
-            JavaPairRDD<Text, SequencedFragment> fragments2 = ctx.newAPIHadoopFile(
-                    fq2, FastqInputFormat.class, Text.class, SequencedFragment.class,
-                    ctx.hadoopConfiguration());
-
-            // The following assumes that partition boundaries are identical, which is only the case if the file sizes
-            // are i
-            // dentical. If this is not true we'd need to do a shuffle, or use an interleaved FASTQ
-            // (and then extend FastqInputFormat to keep pairs together).
-            JavaPairRDD<Tuple2<Text, SequencedFragment>, Tuple2<Text, SequencedFragment>> fragmentPairs = fragments1.zip(fragments2);
-
-            JavaRDD<Tuple2<ShortRead, ShortRead>> shortReadPairs = fragmentPairs.map(p -> {
-                String name1 = pairedEndPrefix(p._1._1.toString());
-                String name2 = pairedEndPrefix(p._2._1.toString());
+            // TODO: set property to keep paired reads together in same split
+            JavaRDD<GATKRead> unalignedReads = getReads();
+            JavaRDD<List<GATKRead>> unalignedPairs = unalignedReads.mapPartitions(iter -> () -> pairwise(iter));
+            JavaRDD<Tuple2<ShortRead, ShortRead>> shortReadPairs = unalignedPairs.map(p -> {
+                GATKRead read1 = p.get(0);
+                GATKRead read2 = p.get(1);
+                String name1 = pairedEndPrefix(read1.getName());
+                String name2 = pairedEndPrefix(read2.getName());
                 return new Tuple2<>(
-                        new ShortRead(name1, p._1._2.getSequence().copyBytes(), p._1._2.getQuality().copyBytes()),
-                        new ShortRead(name2, p._2._2.getSequence().copyBytes(), p._2._2.getQuality().copyBytes()));
+                        new ShortRead(name1, read1.getBases(), read1.getBaseQualities()),
+                        new ShortRead(name2, read2.getBases(), read2.getBaseQualities()));
             });
 
             // Load native library in each task VM
@@ -99,7 +88,7 @@ public final class BwaSpark extends GATKSparkTool {
 
             JavaRDD<String> samLines = shortReadPairs.mapPartitions(iter -> () -> concat(batchIterator(memBroadcast, iter)));
 
-            // TODO: is there a better way to build a header?
+            // TODO: is there a better way to build a header? E.g. from the BAM
             final SAMSequenceDictionary sequences = makeSequenceDictionary(new File(ref));
             final SAMFileHeader readsHeader = new SAMFileHeader();
             readsHeader.setSequenceDictionary(sequences);
@@ -121,6 +110,10 @@ public final class BwaSpark extends GATKSparkTool {
         } catch (IOException e) {
             throw new GATKException(e.toString());
         }
+    }
+
+    private <U> Iterator<List<GATKRead>> pairwise(Iterator<GATKRead> iter) {
+        return Iterators.partition(iter, 2);
     }
 
     private Iterator<List<String>> batchIterator(final Broadcast<BwaMem> memBroadcast, Iterator<Tuple2<ShortRead, ShortRead>> iter) {
