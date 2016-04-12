@@ -36,10 +36,10 @@ public class BreakpointEvidence implements Comparable<BreakpointEvidence>, Seria
         final int start;
         if ( read.isReverseStrand() ) {
             final int readStart = read.getStart();
-            width = readStart - (read.getUnclippedEnd() - templateLen);
+            width = readStart - (read.getUnclippedEnd() + 1 - templateLen);
             start = readStart - width;
         } else {
-            final int readEnd = read.getEnd();
+            final int readEnd = read.getEnd() + 1;
             width = read.getUnclippedStart() + templateLen - readEnd;
             start = readEnd;
         }

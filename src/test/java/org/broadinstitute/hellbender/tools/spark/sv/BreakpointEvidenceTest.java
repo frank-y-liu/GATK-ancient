@@ -17,10 +17,12 @@ public class BreakpointEvidenceTest extends BaseTest {
     void restOfFragmentSizeTest() {
         final SAMFileHeader header = ArtificialReadUtils.createArtificialSamHeaderWithGroups(1, 1, 10000000, 1);
         final String groupName = header.getReadGroups().get(0).getReadGroupId();
-        final ReadMetadata readMetadata = new ReadMetadata(header, Collections.singletonList(new ReadMetadata.ReadGroupFragmentStatistics(301.f, 25.f)));
+        final int readSize = 151;
+        final ReadMetadata readMetadata = new ReadMetadata(header,
+                Collections.singletonList(new ReadMetadata.ReadGroupFragmentStatistics(301.f, 25.f)),
+                readSize);
         final String templateName = "xyzzy";
         final int readStart = 1010101;
-        final int readSize = 151;
         final GATKRead read = ArtificialReadUtils.createArtificialRead(header, templateName, 0, readStart, readSize);
         read.setIsPaired(false);
         read.setIsReverseStrand(true);
@@ -37,5 +39,9 @@ public class BreakpointEvidenceTest extends BaseTest {
         Assert.assertEquals(evidence1.getTemplateEnd(), BreakpointEvidence.TemplateEnd.UNPAIRED);
         Assert.assertEquals(evidence1, evidence2);
         Assert.assertEquals(0, evidence1.compareTo(evidence2));
+        read.setIsReverseStrand(false);
+        final BreakpointEvidence evidence3 = new BreakpointEvidence(read, readMetadata);
+        final BreakpointEvidence evidence4 = new BreakpointEvidence(read, readMetadata, readStart+readSize+uncertainty, (short)uncertainty);
+        Assert.assertEquals(evidence3, evidence4);
     }
 }

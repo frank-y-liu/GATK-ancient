@@ -416,17 +416,33 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> implements KryoSer
     @Override
     public void write(Kryo kryo, Output output) {
         boolean oldReferencesState = kryo.getReferences();
+        // this is actually screwy -- what we need to do is to turn off just the top-level reference resolution as
+        // if we were using the ObjectOutputStream's writeUnshared method.
+        // we're a set, after all, and each object will be unique.  but we don't know what's going on inside
+        // the objects in the set -- they might well have shared references to other objects.
+        // but with kryo there doesn't seem to be a way to do this -- you have to turn off all reference resolution.
         kryo.setReferences(false);
         output.writeInt(capacity);
         output.writeInt(size);
+        int count = 0;
         for ( int idx = 0; idx != capacity; ++idx ) {
-            if ( isChainHead(idx) ) kryo.writeClassAndObject(output, buckets[idx]);
+            if ( isChainHead(idx) ) {
+                kryo.writeClassAndObject(output, buckets[idx]);
+                count += 1;
+            }
         }
         for ( int idx = 0; idx != capacity; ++idx ) {
             final T val = buckets[idx];
-            if ( val != null && !isChainHead(idx) ) kryo.writeClassAndObject(output, val);
+            if ( val != null && !isChainHead(idx) ) {
+                kryo.writeClassAndObject(output, val);
+                count += 1;
+            }
         }
         kryo.setReferences(oldReferencesState);
+
+        if ( count != size ) {
+            throw new IllegalStateException("Failed to serialize the expected number of objects: expected="+size+" actual="+count+".");
+        }
     }
 
     @SuppressWarnings("unchecked")

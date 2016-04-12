@@ -47,6 +47,7 @@ public class FindSVBreakpointsSparkUnitTest extends BaseTest {
         TEST_READS.get(3).setIsProperlyPaired(false);
         TEST_READS.get(3).setIsReverseStrand(false);
     }
+
     @Test(groups = "spark")
     void kmersToIgnoreTest() throws IOException {
         final JavaSparkContext ctx = SparkContextFactory.getTestSparkContext();
