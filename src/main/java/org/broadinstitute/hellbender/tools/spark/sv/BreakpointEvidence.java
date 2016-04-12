@@ -1,5 +1,10 @@
 package org.broadinstitute.hellbender.tools.spark.sv;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.KryoSerializable;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
+import org.broadinstitute.hellbender.engine.spark.GATKRegistrator;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
 
@@ -8,13 +13,13 @@ import java.io.Serializable;
 /**
  * Various types of read anomalies that provide evidence of genomic breakpoints.
  */
-public class BreakpointEvidence implements Comparable<BreakpointEvidence>, Serializable {
+public class BreakpointEvidence implements Comparable<BreakpointEvidence>, KryoSerializable {
     private static final long serialVersionUID = 1L;
-    private final short contigIndex;
-    private final short eventWidth;
-    private final int contigStart;
-    private final String templateName;
-    private final TemplateEnd templateEnd;
+    private short contigIndex;
+    private short eventWidth;
+    private int contigStart;
+    private String templateName;
+    private TemplateEnd templateEnd;
 
     public enum TemplateEnd {
         UNPAIRED(""), PAIRED_UNKNOWN("/?"), PAIRED_FIRST("/1"), PAIRED_SECOND("/2"), PAIRED_INTERIOR("/0");
@@ -132,6 +137,24 @@ public class BreakpointEvidence implements Comparable<BreakpointEvidence>, Seria
         return result;
     }
 
+    @Override
+    public void write(Kryo kryo, Output output) {
+        output.writeShort(contigIndex);
+        output.writeShort(eventWidth);
+        output.writeInt(contigStart);
+        output.writeByte(templateEnd.ordinal());
+        kryo.writeObject(output, templateName);
+    }
+
+    @Override
+    public void read(Kryo kryo, Input input) {
+        contigIndex = input.readShort();
+        eventWidth = input.readShort();
+        contigStart = input.readInt();
+        templateEnd = TemplateEnd.values()[input.readByte()];
+        templateName = kryo.readObject(input, String.class);
+    }
+
     private static TemplateEnd findTemplateEnd( final GATKRead read ) {
         return !read.isPaired() ? TemplateEnd.UNPAIRED :
                !read.isFirstOfPair() && !read.isSecondOfPair() ? TemplateEnd.PAIRED_UNKNOWN :
@@ -239,5 +262,18 @@ public class BreakpointEvidence implements Comparable<BreakpointEvidence>, Seria
         public String toString() {
             return super.toString() + " TemplateSize " + templateSize;
         }
+    }
+
+    static {
+        GATKRegistrator.registerRegistrator(kryo -> {
+            kryo.register(BreakpointEvidence.class);
+            kryo.register(SplitRead.class);
+            kryo.register(LargeIndel.class);
+            kryo.register(MateUnmapped.class);
+            kryo.register(InterContigPair.class);
+            kryo.register(OutiesPair.class);
+            kryo.register(SameStrandPair.class);
+            kryo.register(WeirdTemplateSize.class);
+        });
     }
 }
