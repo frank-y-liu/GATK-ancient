@@ -1,6 +1,5 @@
 package org.broadinstitute.hellbender.tools.spark.sv;
 
-import com.google.cloud.dataflow.sdk.io.Read;
 import com.google.cloud.dataflow.sdk.options.PipelineOptions;
 import htsjdk.samtools.*;
 import htsjdk.samtools.fastq.FastqRecord;
@@ -103,8 +102,9 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
     }
 
     private List<KmerAndInterval> getKmerIntervals( final JavaSparkContext ctx ) {
+        final PipelineOptions pipelineOptions = getAuthenticatedGCSOptions();
         final Broadcast<Set<SVKmer>> broadcastKmerKillList =
-                ctx.broadcast(SVKmer.readKmersFile(new File(kmersToIgnoreFilename)));
+                ctx.broadcast(SVKmer.readKmersFile(kmersToIgnoreFilename, pipelineOptions));
         final Broadcast<HopscotchHashSet<QNameAndInterval>> broadcastQNameAndIntervals =
                 ctx.broadcast(new HopscotchHashSet<>(getQNames(ctx)));
 
@@ -126,7 +126,6 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
 
         // record the kmers
         if ( kmerFile != null ) {
-            final PipelineOptions pipelineOptions = getAuthenticatedGCSOptions();
             try (final OutputStreamWriter writer = new OutputStreamWriter(new BufferedOutputStream(
                     BucketUtils.createFile(kmerFile, pipelineOptions)))) {
                 for (final KmerAndInterval kmerAndInterval : kmerIntervals) {
@@ -188,7 +187,7 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
                               final int meanBasesPerTemplate ) {
         final int nIntervals = intervals.size();
         final int[] qNamesPerInterval = new int[nIntervals];
-        for ( QNameAndInterval qNameAndInterval : qNames ) {
+        for ( final QNameAndInterval qNameAndInterval : qNames ) {
             qNamesPerInterval[qNameAndInterval.getIntervalId()] += 1;
         }
 
@@ -220,7 +219,7 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
     private List<Interval> getIntervals( final Broadcast<ReadMetadata> broadcastMetadata ) {
         // find all breakpoint evidence, then filter for pile-ups
         final int maxFragmentSize = broadcastMetadata.value().getMaxMedianFragmentSize();
-        List<SAMSequenceRecord> contigs = getHeaderForReads().getSequenceDictionary().getSequences();
+        final List<SAMSequenceRecord> contigs = getHeaderForReads().getSequenceDictionary().getSequences();
         final int nContigs = contigs.size();
         final JavaRDD<BreakpointEvidence> evidenceRDD =
                 getUnfilteredReads()
@@ -238,10 +237,12 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
                         .mapPartitions(evidenceItr ->
                                 new MapPartitioner<>(evidenceItr,
                                         new WindowSorter(3*maxFragmentSize), new BreakpointEvidence(nContigs)), true);
-        evidenceRDD.cache();
 
         // record the evidence
-        if ( evidenceDir != null ) evidenceRDD.saveAsTextFile(evidenceDir);
+        if ( evidenceDir != null ) {
+            evidenceRDD.cache();
+            evidenceRDD.saveAsTextFile(evidenceDir);
+        }
 
         // find discrete intervals that contain the breakpoint evidence
         final Iterator<Interval> intervalItr =
@@ -267,7 +268,8 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
             }
             intervals.add(prev);
         }
-        evidenceRDD.unpersist();
+
+        if ( evidenceDir != null ) evidenceRDD.unpersist();
 
         // record the intervals
         if ( intervalFile != null ) {
@@ -291,11 +293,13 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
         final SAMFileHeader header = getHeaderForReads();
         final List<SAMReadGroupRecord> groups = header.getReadGroups();
         final int nGroups = groups.size();
+        final ReadMetadata.ReadGroupFragmentStatistics groupStats =
+                new ReadMetadata.ReadGroupFragmentStatistics(400.f, 75.f);
         final List<ReadMetadata.ReadGroupFragmentStatistics> stats = new ArrayList<>(nGroups);
         for ( int idx = 0; idx != nGroups; ++idx ) {
-            stats.add(new ReadMetadata.ReadGroupFragmentStatistics(400.f,75.f));
+            stats.add(groupStats);
         }
-        ReadMetadata readMetadata = new ReadMetadata(header, stats, getMeanBasesPerTemplate());
+        final ReadMetadata readMetadata = new ReadMetadata(header, stats, groupStats, getMeanBasesPerTemplate());
         log("Metadata retrieved.");
         return readMetadata;
     }
@@ -571,7 +575,7 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
             return obj instanceof KmerAndInterval && equals((KmerAndInterval)obj);
         }
 
-        public final boolean equals( final KmerAndInterval that ) {
+        public boolean equals( final KmerAndInterval that ) {
             return equals((SVKmer)that) && this.intervalId == that.intervalId;
         }
 
@@ -657,7 +661,7 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
             int readIdx = 0;
             int testIdx = 1;
             while ( testIdx < nKmers ) {
-                SVKmer test = kmers[readIdx];
+                final SVKmer test = kmers[readIdx];
                 while ( testIdx < nKmers && kmers[testIdx].equals(test) ) {
                     ++testIdx;
                 }
@@ -690,8 +694,8 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
     private static final class ReadsForIntervalFinder
             implements Function<GATKRead, Iterator<Tuple2<Integer,FastqRecord>>> {
         private final HopscotchHashSet<KmerAndInterval> kmerAndIntervalSet;
-        private Set<Integer> intervalIds = new HashSet<>();
-        private List<Tuple2<Integer, FastqRecord>> tuples = new ArrayList<>();
+        private final Set<Integer> intervalIds = new HashSet<>();
+        private final List<Tuple2<Integer, FastqRecord>> tuples = new ArrayList<>();
 
         ReadsForIntervalFinder(final HopscotchHashSet<KmerAndInterval> kmerAndIntervalSet) {
             this.kmerAndIntervalSet = kmerAndIntervalSet;
@@ -702,9 +706,9 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
             SVKmerizer.stream(read.getBases(), SVConstants.KMER_SIZE)
                     .map( kmer -> kmer.canonical(SVConstants.KMER_SIZE) )
                     .forEach( kmer -> {
-                        Iterator<KmerAndInterval> itr = kmerAndIntervalSet.bucketIterator(kmer.hashCode());
+                        final Iterator<KmerAndInterval> itr = kmerAndIntervalSet.bucketIterator(kmer.hashCode());
                         while ( itr.hasNext() ) {
-                            KmerAndInterval kmerAndInterval = itr.next();
+                            final KmerAndInterval kmerAndInterval = itr.next();
                             if (kmer.equals(kmerAndInterval)) intervalIds.add(kmerAndInterval.getIntervalId());
                         }
                     });
@@ -712,7 +716,7 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
             tuples.clear();
             String readName = read.getName();
             if ( read.isPaired() ) readName += read.isFirstOfPair() ? "/1" : "/2";
-            FastqRecord fastqRecord =
+            final FastqRecord fastqRecord =
                     new FastqRecord(readName, read.getBasesString(), null, ReadUtils.getBaseQualityString(read));
             intervalIds.stream().forEach(intervalId -> tuples.add(new Tuple2<>(intervalId, fastqRecord)));
             return tuples.iterator();

@@ -17,9 +17,9 @@ public class ReadMetadataTest extends BaseTest {
         final SAMFileHeader header = ArtificialReadUtils.createArtificialSamHeaderWithGroups(1, 1, 10000000, 1);
         final String chr1Name = header.getSequenceDictionary().getSequence(0).getSequenceName();
         final String groupName = header.getReadGroups().get(0).getReadGroupId();
-        final ReadMetadata.ReadGroupFragmentStatistics statistics = new ReadMetadata.ReadGroupFragmentStatistics(301.f, 25.f);
+        final ReadMetadata.ReadGroupFragmentStatistics statistics = new ReadMetadata.ReadGroupFragmentStatistics(400.f, 75.f);
         final int readSize = 151;
-        final ReadMetadata readMetadata = new ReadMetadata(header, Collections.singletonList(statistics), readSize);
+        final ReadMetadata readMetadata = new ReadMetadata(header, Collections.singletonList(statistics), statistics, readSize);
         Assert.assertEquals(readMetadata.getContigID(chr1Name), 0);
         Assert.assertThrows(() -> readMetadata.getContigID("not a real name"));
         Assert.assertEquals(readMetadata.getStatistics(groupName), statistics);

@@ -21,6 +21,7 @@ public class ReadMetadata implements Serializable {
 
     public ReadMetadata( final SAMFileHeader header,
                          final List<ReadGroupFragmentStatistics> statistics,
+                         ReadGroupFragmentStatistics noGroupStats,
                          final int meanBasesPerTemplate ) {
         final List<SAMSequenceRecord> contigs = header.getSequenceDictionary().getSequences();
         if ( contigs.size() > Short.MAX_VALUE ) throw new GATKException("Too many reference contigs.");
@@ -37,7 +38,7 @@ public class ReadMetadata implements Serializable {
         for ( int readGroupId = 0; readGroupId < nReadGroups; ++readGroupId ) {
             readGroupToFragmentStatistics.put(readGroups.get(readGroupId).getId(), statistics.get(readGroupId));
         }
-
+        readGroupToFragmentStatistics.put(null, noGroupStats);
         this.meanBasesPerTemplate = meanBasesPerTemplate;
     }
 

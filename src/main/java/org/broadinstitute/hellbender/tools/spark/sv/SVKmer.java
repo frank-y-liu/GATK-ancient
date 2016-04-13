@@ -1,14 +1,13 @@
 package org.broadinstitute.hellbender.tools.spark.sv;
 
-import com.esotericsoftware.kryo.Kryo;
-import org.apache.spark.serializer.KryoRegistrator;
+import com.google.cloud.dataflow.sdk.options.PipelineOptions;
 import org.broadinstitute.hellbender.engine.spark.GATKRegistrator;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.tools.spark.utils.HopscotchHashSet;
 import org.broadinstitute.hellbender.utils.BaseUtils;
+import org.broadinstitute.hellbender.utils.gcs.BucketUtils;
 
 import java.io.*;
-import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -192,10 +191,12 @@ public class SVKmer implements Comparable<SVKmer>, Serializable {
      * Read a file of kmers.
      * Each line must be exactly SVConstants.KMER_SIZE characters long, and must match [ACGT]*.
      */
-    public static Set<SVKmer> readKmersFile( final File kmersFile ) {
-        final Set<SVKmer> kmers = new HopscotchHashSet<>((int)(kmersFile.length()/(SVConstants.KMER_SIZE+1)));
+    public static Set<SVKmer> readKmersFile( final String kmersFile, final PipelineOptions popts ) {
+        final Set<SVKmer> kmers;
 
         try ( final BufferedReader rdr = new BufferedReader(new FileReader(kmersFile)) ) {
+            final long fileLength = BucketUtils.fileSize(kmersFile, popts);
+            kmers = new HopscotchHashSet<>((int)(fileLength/(SVConstants.KMER_SIZE+1)));
             String line;
             while ( (line = rdr.readLine()) != null ) {
                 if ( line.length() != SVConstants.KMER_SIZE ) {

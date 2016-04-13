@@ -89,7 +89,8 @@ public class FindSVBreakpointsSpark extends GATKSparkTool {
      */
     private Map<SVKmer, List<Long>> findClusters( final JavaSparkContext ctx ) {
         // read the ignored kmer list
-        final Broadcast<Set<SVKmer>> kmersToIgnore = ctx.broadcast(SVKmer.readKmersFile(new File(kmersToIgnoreFilename)));
+        final Set<SVKmer> kmersSet = SVKmer.readKmersFile(kmersToIgnoreFilename, getAuthenticatedGCSOptions());
+        final Broadcast<Set<SVKmer>> kmersToIgnore = ctx.broadcast(kmersSet);
 
         // produce a set of Breakpoint IDs for each of an interesting set of Kmers by...
         // 1) identifying putative breakpoints supported by a cluster of funky reads
