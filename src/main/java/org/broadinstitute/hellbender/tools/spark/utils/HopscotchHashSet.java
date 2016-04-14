@@ -413,15 +413,15 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> {
         throw new IllegalStateException("Unable to increase capacity.");
     }
 
-    private static final class Serializer extends com.esotericsoftware.kryo.Serializer<HopscotchHashSet> {
+    private static final class Serializer<T> extends com.esotericsoftware.kryo.Serializer<HopscotchHashSet<T>> {
         @Override
-        public void write( final Kryo kryo, final Output output, final HopscotchHashSet hopscotchHashSet ) {
+        public void write( final Kryo kryo, final Output output, final HopscotchHashSet<T> hopscotchHashSet ) {
             hopscotchHashSet.serialize(kryo, output);
         }
 
         @Override
-        public HopscotchHashSet read( final Kryo kryo, final Input input, final Class<HopscotchHashSet> klass ) {
-            return new HopscotchHashSet(kryo, input);
+        public HopscotchHashSet<T> read( final Kryo kryo, final Input input, final Class<HopscotchHashSet<T>> klass ) {
+            return new HopscotchHashSet<>(kryo, input);
         }
     }
 
@@ -470,6 +470,6 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> {
 
     static {
         GATKRegistrator.registerRegistrator(kryo ->
-                kryo.register(HopscotchHashSet.class, new HopscotchHashSet.Serializer()));
+                kryo.register(HopscotchHashSet.class, new HopscotchHashSet.Serializer<Object>()));
     }
 }

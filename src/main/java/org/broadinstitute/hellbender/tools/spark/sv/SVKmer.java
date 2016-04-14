@@ -18,9 +18,7 @@ import java.util.Set;
  * K must be between 1 and 63 (but it's silly to use this class for K < 33).
  * Canonicalization is unimplemented for even K.
  */
-public class SVKmer implements Comparable<SVKmer>, Serializable {
-    private static final long serialVersionUID = 1L;
-
+public class SVKmer implements Comparable<SVKmer> {
     // these are treated as K-bit unsigned integers
     private final long valHigh; // most significant K bits
     private final long valLow; // least significant K bits
