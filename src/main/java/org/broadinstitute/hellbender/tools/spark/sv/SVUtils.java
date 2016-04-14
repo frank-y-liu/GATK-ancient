@@ -6,7 +6,7 @@ import java.util.NoSuchElementException;
 /**
  * Useful scraps of this and that.
  */
-public class SVUtils {
+public final class SVUtils {
 
     /**
      * return a good initialCapacity for a HashMap that will hold a given number of elements

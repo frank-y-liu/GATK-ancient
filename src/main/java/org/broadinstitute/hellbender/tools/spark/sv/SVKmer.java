@@ -39,7 +39,7 @@ public class SVKmer implements Comparable<SVKmer>, Serializable {
         G(2L),
         T(3L);
 
-        public long value;
+        public final long value;
 
         Base(final long value) { this.value = value; }
     }
@@ -194,7 +194,8 @@ public class SVKmer implements Comparable<SVKmer>, Serializable {
     public static Set<SVKmer> readKmersFile( final String kmersFile, final PipelineOptions popts ) {
         final Set<SVKmer> kmers;
 
-        try ( final BufferedReader rdr = new BufferedReader(new FileReader(kmersFile)) ) {
+        try ( final BufferedReader rdr =
+                      new BufferedReader(new InputStreamReader(BucketUtils.openFile(kmersFile, popts))) ) {
             final long fileLength = BucketUtils.fileSize(kmersFile, popts);
             kmers = new HopscotchHashSet<>((int)(fileLength/(SVConstants.KMER_SIZE+1)));
             String line;

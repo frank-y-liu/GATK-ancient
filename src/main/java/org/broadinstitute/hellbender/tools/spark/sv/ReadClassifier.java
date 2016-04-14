@@ -14,9 +14,9 @@ public class ReadClassifier implements Function<GATKRead, Iterator<BreakpointEvi
     private static final int MIN_SOFT_CLIP_LEN = 30; // minimum length of an interesting soft clip
     private static final int MIN_INDEL_LEN = 40; // minimum length of an interesting indel
     private static final byte MIN_QUALITY = 15; // minimum acceptable quality in a soft-clip window
-    private static final float MIN_ZISH_SCORE = -4.f;
-    private static final float MAX_ZISH_SCORE = 6.f;
-    private static final float CRAZY_ZISH_SCORE = 100.f;
+    //private static final float MIN_ZISH_SCORE = -4.f;
+    //private static final float MAX_ZISH_SCORE = 6.f;
+    //private static final float CRAZY_ZISH_SCORE = 100.f;
     private final ReadMetadata readMetadata;
 
     public ReadClassifier( final ReadMetadata readMetadata ) {

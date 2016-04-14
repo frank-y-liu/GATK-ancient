@@ -18,7 +18,6 @@ import java.util.*;
  * sizing, but then it'll behave just as badly as HashSet given crappy hashCode implementations.
  */
 public final class HopscotchHashSet<T> extends AbstractSet<T> implements KryoSerializable {
-    private static final long serialVersionUID = 1L;
     // For power-of-2 table sizes add this line
     //private static final int maxCapacity = Integer.MAX_VALUE/2 + 1;
 
@@ -335,7 +334,7 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> implements KryoSer
         }
     }
 
-    private static int computeCapacity( int size ) {
+    private static int computeCapacity( final int size ) {
         // For power-of-2 table sizes substitute these lines
         /*
         if ( size > maxCapacity ) throw new IllegalArgumentException("Table can't be that big.");
@@ -414,8 +413,8 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> implements KryoSer
     }
 
     @Override
-    public void write(Kryo kryo, Output output) {
-        boolean oldReferencesState = kryo.getReferences();
+    public void write( final Kryo kryo, final Output output ) {
+        final boolean oldReferencesState = kryo.getReferences();
         // this is actually screwy -- what we need to do is to turn off just the top-level reference resolution as
         // if we were using the ObjectOutputStream's writeUnshared method.
         // we're a set, after all, and each object will be unique.  but we don't know what's going on inside
@@ -447,8 +446,8 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> implements KryoSer
 
     @SuppressWarnings("unchecked")
     @Override
-    public void read(Kryo kryo, Input input) {
-        boolean oldReferencesState = kryo.getReferences();
+    public void read( final Kryo kryo, final Input input ) {
+        final boolean oldReferencesState = kryo.getReferences();
         kryo.setReferences(false);
         capacity = input.readInt();
         size = 0;
