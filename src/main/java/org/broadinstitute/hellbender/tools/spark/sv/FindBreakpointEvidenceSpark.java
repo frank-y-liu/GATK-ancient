@@ -1,5 +1,8 @@
 package org.broadinstitute.hellbender.tools.spark.sv;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import com.google.cloud.dataflow.sdk.options.PipelineOptions;
 import htsjdk.samtools.*;
 import htsjdk.samtools.fastq.FastqRecord;
@@ -320,15 +323,39 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
         private final long length;
 
         public ReadCountAndLength() { count = 0; length = 0; }
+
         public ReadCountAndLength( final ReadCountAndLength countNLength, final GATKRead read ) {
             this.count = countNLength.count + 1;
             this.length = countNLength.length + (read.isPaired()?2:1)*read.getLength(); }
+
         public ReadCountAndLength( final ReadCountAndLength countNLength1, final ReadCountAndLength countNLength2 ) {
             this.count = countNLength1.count + countNLength2.count;
             this.length = countNLength1.length + countNLength2.length;
         }
 
+        private ReadCountAndLength( final Kryo kryo, final Input input ) {
+            count = input.readLong();
+            length = input.readLong();
+        }
+
+        private void serialize( final Kryo kryo, final Output output ) {
+            output.writeLong(count);
+            output.writeLong(length);
+        }
+
         public long getMeanLength() { return count != 0 ? length/count : 0; }
+
+        private static final class Serializer extends com.esotericsoftware.kryo.Serializer<ReadCountAndLength> {
+            @Override
+            public void write( final Kryo kryo, final Output output, final ReadCountAndLength readCountAndLength ) {
+                readCountAndLength.serialize(kryo, output);
+            }
+
+            @Override
+            public ReadCountAndLength read( final Kryo kryo, final Input input, final Class<ReadCountAndLength> klass ) {
+                return new ReadCountAndLength(kryo, input);
+            }
+        }
     }
 
     /**
@@ -421,8 +448,7 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
     /**
      * Minimalistic simple interval.
      */
-    private static final class Interval implements Serializable {
-        private static final long serialVersionUID = 1L;
+    private static final class Interval {
         private final int contig;
         private final int start;
         private final int end;
@@ -431,6 +457,18 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
             this.contig = contig;
             this.start = start;
             this.end = end;
+        }
+
+        private Interval( final Kryo kryo, final Input input ) {
+            contig = input.readInt();
+            start = input.readInt();
+            end = input.readInt();
+        }
+
+        private void serialize( final Kryo kryo, final Output output ) {
+            output.writeInt(contig);
+            output.writeInt(start);
+            output.writeInt(end);
         }
 
         public int getContig() { return contig; }
@@ -445,6 +483,18 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
         public Interval join( final Interval that ) {
             if ( this.contig != that.contig ) throw new GATKException("Joining across contigs.");
             return new Interval(contig, Math.min(this.start, that.start), Math.max(this.end, that.end));
+        }
+
+        private static final class Serializer extends com.esotericsoftware.kryo.Serializer<Interval> {
+            @Override
+            public void write( final Kryo kryo, final Output output, final Interval interval ) {
+                interval.serialize(kryo, output);
+            }
+
+            @Override
+            public Interval read( final Kryo kryo, final Input input, final Class<Interval> klass ) {
+                return new Interval(kryo, input);
+            }
         }
     }
 
@@ -498,6 +548,20 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
             this.intervalId = intervalId;
         }
 
+        private QNameAndInterval( final Kryo kryo, final Input input ) {
+            final int nameLen = input.readInt();
+            qName = input.readBytes(nameLen);
+            hashVal = input.readInt();
+            intervalId = input.readInt();
+        }
+
+        private void serialize( final Kryo kryo, final Output output ) {
+            output.writeInt(qName.length);
+            output.writeBytes(qName);
+            output.writeInt(hashVal);
+            output.writeInt(intervalId);
+        }
+
         public String getQName() { return new String(qName); }
         public int getIntervalId() { return intervalId; }
 
@@ -516,6 +580,18 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
         public boolean sameName( final byte[] name ) { return Arrays.equals(qName,name); }
 
         public String toString() { return new String(qName)+" "+intervalId; }
+
+        private static final class Serializer extends com.esotericsoftware.kryo.Serializer<QNameAndInterval> {
+            @Override
+            public void write( final Kryo kryo, final Output output, final QNameAndInterval qNameAndInterval ) {
+                qNameAndInterval.serialize(kryo, output);
+            }
+
+            @Override
+            public QNameAndInterval read( final Kryo kryo, final Input input, final Class<QNameAndInterval> klass ) {
+                return new QNameAndInterval(kryo, input);
+            }
+        }
     }
 
     /**
@@ -562,12 +638,21 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
      * This is actually a compacted (K,V) pair, and the hashCode is on K only.
      */
     private final static class KmerAndInterval extends SVKmer {
-        private static final long serialVersionUID = 1L;
         private final int intervalId;
 
         KmerAndInterval( final SVKmer kmer, final int intervalId ) {
             super(kmer);
             this.intervalId = intervalId;
+        }
+
+        private KmerAndInterval( final Kryo kryo, final Input input ) {
+            super(kryo, input);
+            intervalId = input.readInt();
+        }
+
+        protected void serialize( final Kryo kryo, final Output output ) {
+            super.serialize(kryo, output);
+            output.writeInt(intervalId);
         }
 
         @Override
@@ -588,6 +673,18 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
         public int getIntervalId() { return intervalId; }
 
         public String toString() { return toString(SVConstants.KMER_SIZE)+" "+intervalId; }
+
+        private static final class Serializer extends com.esotericsoftware.kryo.Serializer<KmerAndInterval> {
+            @Override
+            public void write( final Kryo kryo, final Output output, final KmerAndInterval kmerAndInterval ) {
+                kmerAndInterval.serialize(kryo, output);
+            }
+
+            @Override
+            public KmerAndInterval read( final Kryo kryo, final Input input, final Class<KmerAndInterval> klass ) {
+                return new KmerAndInterval(kryo, input);
+            }
+        }
     }
 
     /**
@@ -725,10 +822,10 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
 
     static {
         GATKRegistrator.registerRegistrator(kryo -> {
-            kryo.register(ReadCountAndLength.class);
-            kryo.register(Interval.class);
-            kryo.register(QNameAndInterval.class);
-            kryo.register(KmerAndInterval.class);
+            kryo.register(ReadCountAndLength.class, new ReadCountAndLength.Serializer());
+            kryo.register(Interval.class, new Interval.Serializer());
+            kryo.register(QNameAndInterval.class, new QNameAndInterval.Serializer());
+            kryo.register(KmerAndInterval.class, new KmerAndInterval.Serializer());
         });
     }
 }

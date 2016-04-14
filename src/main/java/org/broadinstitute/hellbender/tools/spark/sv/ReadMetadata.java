@@ -46,14 +46,14 @@ public class ReadMetadata {
 
     @SuppressWarnings("unchecked")
     private ReadMetadata( final Kryo kryo, final Input input ) {
-        contigNameToID = kryo.readObject(input, HashMap.class);
-        readGroupToFragmentStatistics = kryo.readObject(input, HashMap.class);
+        contigNameToID = (Map<String, Short>)kryo.readClassAndObject(input);
+        readGroupToFragmentStatistics = (Map<String, ReadGroupFragmentStatistics>)kryo.readClassAndObject(input);
         meanBasesPerTemplate = input.readInt();
     }
 
     private void serialize( final Kryo kryo, final Output output ) {
-        kryo.writeObject(output, contigNameToID);
-        kryo.writeObject(output, readGroupToFragmentStatistics);
+        kryo.writeClassAndObject(output, contigNameToID);
+        kryo.writeClassAndObject(output, readGroupToFragmentStatistics);
         output.writeInt(meanBasesPerTemplate);
     }
 

@@ -1,5 +1,8 @@
 package org.broadinstitute.hellbender.tools.spark.sv;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import com.google.cloud.dataflow.sdk.options.PipelineOptions;
 import org.broadinstitute.hellbender.engine.spark.GATKRegistrator;
 import org.broadinstitute.hellbender.exceptions.GATKException;
@@ -55,6 +58,16 @@ public class SVKmer implements Comparable<SVKmer>, Serializable {
     public SVKmer( final SVKmer that ) { this.valHigh = that.valHigh; this.valLow = that.valLow; }
 
     private SVKmer( final long valHigh, final long valLow ) { this.valHigh = valHigh; this.valLow = valLow; }
+
+    protected SVKmer( final Kryo kryo, final Input input ) {
+        valHigh = input.readLong();
+        valLow = input.readLong();
+    }
+
+    protected void serialize( final Kryo kryo, final Output output ) {
+        output.writeLong(valHigh);
+        output.writeLong(valLow);
+    }
 
     /**
      * Returns a new SVKmer that's like this one, but with its leading base discarded and a new one added to the end.
@@ -239,7 +252,19 @@ public class SVKmer implements Comparable<SVKmer>, Serializable {
         return result;
     }
 
+    private static final class Serializer extends com.esotericsoftware.kryo.Serializer<SVKmer> {
+        @Override
+        public void write(final Kryo kryo, final Output output, final SVKmer svKmer ) {
+            svKmer.serialize(kryo, output);
+        }
+
+        @Override
+        public SVKmer read(final Kryo kryo, final Input input, final Class<SVKmer> klass ) {
+            return new SVKmer(kryo, input);
+        }
+    }
+
     static {
-        GATKRegistrator.registerRegistrator(kryo -> kryo.register(SVKmer.class));
+        GATKRegistrator.registerRegistrator(kryo -> kryo.register(SVKmer.class, new SVKmer.Serializer()));
     }
 }

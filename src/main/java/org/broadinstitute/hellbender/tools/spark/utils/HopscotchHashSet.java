@@ -1,10 +1,8 @@
 package org.broadinstitute.hellbender.tools.spark.utils;
 
 import com.esotericsoftware.kryo.Kryo;
-import com.esotericsoftware.kryo.KryoSerializable;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
-import com.esotericsoftware.kryo.serializers.DefaultSerializers;
 import com.google.common.annotations.VisibleForTesting;
 import org.broadinstitute.hellbender.engine.spark.GATKRegistrator;
 
@@ -17,7 +15,7 @@ import java.util.*;
  * You can make it pretty much equally fast as HashSet by replacing the prime-number table sizing with power-of-2 table
  * sizing, but then it'll behave just as badly as HashSet given crappy hashCode implementations.
  */
-public final class HopscotchHashSet<T> extends AbstractSet<T> implements KryoSerializable {
+public final class HopscotchHashSet<T> extends AbstractSet<T> {
     // For power-of-2 table sizes add this line
     //private static final int maxCapacity = Integer.MAX_VALUE/2 + 1;
 
@@ -58,6 +56,52 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> implements KryoSer
     public HopscotchHashSet( final Collection<T> collection ) {
         this(collection.size());
         addAll(collection);
+    }
+
+    @SuppressWarnings("unchecked")
+    private HopscotchHashSet( final Kryo kryo, final Input input ) {
+        final boolean oldReferencesState = kryo.getReferences();
+        kryo.setReferences(false);
+        capacity = input.readInt();
+        size = 0;
+        buckets = (T[])new Object[capacity];
+        status = new byte[capacity];
+        int size = input.readInt();
+        while ( size-- > 0 ) {
+            add((T)kryo.readClassAndObject(input));
+        }
+        kryo.setReferences(oldReferencesState);
+    }
+
+    private void serialize( final Kryo kryo, final Output output ) {
+        final boolean oldReferencesState = kryo.getReferences();
+        // this is actually screwy -- what we need to do is to turn off just the top-level reference resolution as
+        // if we were using the ObjectOutputStream's writeUnshared method.
+        // we're a set, after all, and each object will be unique.  but we don't know what's going on inside
+        // the objects in the set -- they might well have shared references to other objects.
+        // but with kryo there doesn't seem to be a way to do this -- you have to turn off all reference resolution.
+        kryo.setReferences(false);
+        output.writeInt(capacity);
+        output.writeInt(size);
+        int count = 0;
+        for ( int idx = 0; idx != capacity; ++idx ) {
+            if ( isChainHead(idx) ) {
+                kryo.writeClassAndObject(output, buckets[idx]);
+                count += 1;
+            }
+        }
+        for ( int idx = 0; idx != capacity; ++idx ) {
+            final T val = buckets[idx];
+            if ( val != null && !isChainHead(idx) ) {
+                kryo.writeClassAndObject(output, val);
+                count += 1;
+            }
+        }
+        kryo.setReferences(oldReferencesState);
+
+        if ( count != size ) {
+            throw new IllegalStateException("Failed to serialize the expected number of objects: expected="+size+" actual="+count+".");
+        }
     }
 
     @Override
@@ -369,6 +413,18 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> implements KryoSer
         throw new IllegalStateException("Unable to increase capacity.");
     }
 
+    private static final class Serializer extends com.esotericsoftware.kryo.Serializer<HopscotchHashSet> {
+        @Override
+        public void write( final Kryo kryo, final Output output, final HopscotchHashSet hopscotchHashSet ) {
+            hopscotchHashSet.serialize(kryo, output);
+        }
+
+        @Override
+        public HopscotchHashSet read( final Kryo kryo, final Input input, final Class<HopscotchHashSet> klass ) {
+            return new HopscotchHashSet(kryo, input);
+        }
+    }
+
     private final class BucketIterator implements Iterator<T> {
         private int bucketIndex;
 
@@ -412,56 +468,8 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> implements KryoSer
         }
     }
 
-    @Override
-    public void write( final Kryo kryo, final Output output ) {
-        final boolean oldReferencesState = kryo.getReferences();
-        // this is actually screwy -- what we need to do is to turn off just the top-level reference resolution as
-        // if we were using the ObjectOutputStream's writeUnshared method.
-        // we're a set, after all, and each object will be unique.  but we don't know what's going on inside
-        // the objects in the set -- they might well have shared references to other objects.
-        // but with kryo there doesn't seem to be a way to do this -- you have to turn off all reference resolution.
-        kryo.setReferences(false);
-        output.writeInt(capacity);
-        output.writeInt(size);
-        int count = 0;
-        for ( int idx = 0; idx != capacity; ++idx ) {
-            if ( isChainHead(idx) ) {
-                kryo.writeClassAndObject(output, buckets[idx]);
-                count += 1;
-            }
-        }
-        for ( int idx = 0; idx != capacity; ++idx ) {
-            final T val = buckets[idx];
-            if ( val != null && !isChainHead(idx) ) {
-                kryo.writeClassAndObject(output, val);
-                count += 1;
-            }
-        }
-        kryo.setReferences(oldReferencesState);
-
-        if ( count != size ) {
-            throw new IllegalStateException("Failed to serialize the expected number of objects: expected="+size+" actual="+count+".");
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    @Override
-    public void read( final Kryo kryo, final Input input ) {
-        final boolean oldReferencesState = kryo.getReferences();
-        kryo.setReferences(false);
-        capacity = input.readInt();
-        size = 0;
-        buckets = (T[])new Object[capacity];
-        status = new byte[capacity];
-        int size = input.readInt();
-        while ( size-- > 0 ) {
-            add((T)kryo.readClassAndObject(input));
-        }
-        kryo.setReferences(oldReferencesState);
-    }
-
     static {
         GATKRegistrator.registerRegistrator(kryo ->
-                kryo.register(HopscotchHashSet.class, new DefaultSerializers.KryoSerializableSerializer()));
+                kryo.register(HopscotchHashSet.class, new HopscotchHashSet.Serializer()));
     }
 }
