@@ -46,14 +46,34 @@ public class ReadMetadata {
 
     @SuppressWarnings("unchecked")
     private ReadMetadata( final Kryo kryo, final Input input ) {
-        contigNameToID = (Map<String, Short>)kryo.readClassAndObject(input);
-        readGroupToFragmentStatistics = (Map<String, ReadGroupFragmentStatistics>)kryo.readClassAndObject(input);
+        int contigMapSize = input.readInt();
+        contigNameToID = new HashMap<>(SVUtils.hashMapCapacity(contigMapSize));
+        while ( contigMapSize-- > 0 ) {
+            final String contigName = kryo.readObject(input, String.class);
+            final short contigId = input.readShort();
+            contigNameToID.put(contigName, contigId);
+        }
+        int readGroupMapSize = input.readInt();
+        readGroupToFragmentStatistics = new HashMap<>(SVUtils.hashMapCapacity(readGroupMapSize));
+        while ( readGroupMapSize-- > 0 ) {
+            final String readGroupName = kryo.readObjectOrNull(input, String.class);
+            final ReadGroupFragmentStatistics groupStats = kryo.readObject(input, ReadGroupFragmentStatistics.class);
+            readGroupToFragmentStatistics.put(readGroupName, groupStats);
+        }
         meanBasesPerTemplate = input.readInt();
     }
 
     private void serialize( final Kryo kryo, final Output output ) {
-        kryo.writeClassAndObject(output, contigNameToID);
-        kryo.writeClassAndObject(output, readGroupToFragmentStatistics);
+        output.writeInt(contigNameToID.size());
+        for ( Map.Entry<String, Short> entry : contigNameToID.entrySet() ) {
+            kryo.writeObject(output, entry.getKey());
+            output.writeShort(entry.getValue());
+        }
+        output.writeInt(readGroupToFragmentStatistics.size());
+        for ( Map.Entry<String, ReadGroupFragmentStatistics> entry : readGroupToFragmentStatistics.entrySet() ) {
+            kryo.writeObjectOrNull(output, entry.getKey(), String.class);
+            kryo.writeObject(output, entry.getValue());
+        }
         output.writeInt(meanBasesPerTemplate);
     }
 
