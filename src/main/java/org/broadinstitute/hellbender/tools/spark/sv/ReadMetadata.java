@@ -1,11 +1,14 @@
 package org.broadinstitute.hellbender.tools.spark.sv;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMReadGroupRecord;
 import htsjdk.samtools.SAMSequenceRecord;
+import org.broadinstitute.hellbender.engine.spark.GATKRegistrator;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 
-import java.io.Serializable;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,15 +16,14 @@ import java.util.Map;
 /**
  * A bag of data about reads:  contig name to id mapping, fragment length statistics by read group.
  */
-public class ReadMetadata implements Serializable {
-    private static final long serialVersionUID = 1L;
+public class ReadMetadata {
     private final Map<String, Short> contigNameToID;
     private final Map<String, ReadGroupFragmentStatistics> readGroupToFragmentStatistics;
     private final int meanBasesPerTemplate;
 
     public ReadMetadata( final SAMFileHeader header,
                          final List<ReadGroupFragmentStatistics> statistics,
-                         ReadGroupFragmentStatistics noGroupStats,
+                         final ReadGroupFragmentStatistics noGroupStats,
                          final int meanBasesPerTemplate ) {
         final List<SAMSequenceRecord> contigs = header.getSequenceDictionary().getSequences();
         if ( contigs.size() > Short.MAX_VALUE ) throw new GATKException("Too many reference contigs.");
@@ -42,6 +44,19 @@ public class ReadMetadata implements Serializable {
         this.meanBasesPerTemplate = meanBasesPerTemplate;
     }
 
+    @SuppressWarnings("unchecked")
+    private ReadMetadata( final Kryo kryo, final Input input ) {
+        contigNameToID = kryo.readObject(input, HashMap.class);
+        readGroupToFragmentStatistics = kryo.readObject(input, HashMap.class);
+        meanBasesPerTemplate = input.readInt();
+    }
+
+    private void serialize( final Kryo kryo, final Output output ) {
+        kryo.writeObject(output, contigNameToID);
+        kryo.writeObject(output, readGroupToFragmentStatistics);
+        output.writeInt(meanBasesPerTemplate);
+    }
+
     public short getContigID( final String contigName ) {
         final Short result = contigNameToID.get(contigName);
         if ( result == null ) throw new GATKException("No such contig name: "+contigName);
@@ -58,13 +73,24 @@ public class ReadMetadata implements Serializable {
         return readGroupToFragmentStatistics.entrySet().stream()
                 .mapToInt(entry -> Math.round(entry.getValue().getMedianFragmentSize()))
                 .max()
-                .getAsInt();
+                .orElse(0);
     }
 
     public int getMeanBasesPerTemplate() { return meanBasesPerTemplate; }
 
-    public static class ReadGroupFragmentStatistics implements Serializable {
-        private static final long serialVersionUID = 1L;
+    private static final class Serializer extends com.esotericsoftware.kryo.Serializer<ReadMetadata> {
+        @Override
+        public void write( final Kryo kryo, final Output output, final ReadMetadata readMetadata ) {
+            readMetadata.serialize(kryo, output);
+        }
+
+        @Override
+        public ReadMetadata read( final Kryo kryo, final Input input, final Class<ReadMetadata> klass ) {
+            return new ReadMetadata(kryo, input);
+        }
+    }
+
+    public static final class ReadGroupFragmentStatistics {
         private final float medianFragmentSize;
         private final float medianFragmentSizeVariance;
 
@@ -73,21 +99,39 @@ public class ReadMetadata implements Serializable {
             this.medianFragmentSizeVariance = medianFragmentSizeVariance;
         }
 
-        public float getMedianFragmentSize() { return medianFragmentSize; }
+        private ReadGroupFragmentStatistics( final Kryo kryo, final Input input ) {
+            medianFragmentSize = input.readFloat();
+            medianFragmentSizeVariance = input.readFloat();
+        }
 
+        private void serialize( final Kryo kryo, final Output output ) {
+            output.writeFloat(medianFragmentSize);
+            output.writeFloat(medianFragmentSizeVariance);
+        }
+
+        public float getMedianFragmentSize() { return medianFragmentSize; }
         public float getMedianFragmentSizeVariance() { return medianFragmentSizeVariance; }
 
-        @Override
-        public boolean equals( final Object obj ) {
-            if ( !(obj instanceof ReadGroupFragmentStatistics) ) return false;
-            final ReadGroupFragmentStatistics that = (ReadGroupFragmentStatistics)obj;
-            return this.medianFragmentSize == that.medianFragmentSize &&
-                    this.medianFragmentSizeVariance == that.medianFragmentSizeVariance;
-        }
+        private static final class Serializer
+                extends com.esotericsoftware.kryo.Serializer<ReadGroupFragmentStatistics> {
+            @Override
+            public void write( final Kryo kryo, final Output output,
+                               final ReadGroupFragmentStatistics readGroupFragmentStatistics ) {
+                readGroupFragmentStatistics.serialize(kryo, output);
+            }
 
-        @Override
-        public int hashCode() {
-            return 47*(101 + (int)(100.f*medianFragmentSize)) + (int)(10000.f*medianFragmentSizeVariance);
+            @Override
+            public ReadGroupFragmentStatistics read( final Kryo kryo, final Input input,
+                                                     final Class<ReadGroupFragmentStatistics> klass ) {
+                return new ReadGroupFragmentStatistics(kryo, input);
+            }
         }
+    }
+
+    static {
+        GATKRegistrator.registerRegistrator(kryo -> {
+            kryo.register(ReadMetadata.class, new ReadMetadata.Serializer());
+            kryo.register(ReadMetadata.ReadGroupFragmentStatistics.class, new ReadGroupFragmentStatistics.Serializer());
+        });
     }
 }
