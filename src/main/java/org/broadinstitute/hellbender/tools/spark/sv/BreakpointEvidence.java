@@ -198,7 +198,7 @@ public class BreakpointEvidence implements Comparable<BreakpointEvidence> {
             return super.toString() + " Split " + cigar;
         }
 
-        private static final class Serializer extends com.esotericsoftware.kryo.Serializer<SplitRead> {
+        public static final class Serializer extends com.esotericsoftware.kryo.Serializer<SplitRead> {
             @Override
             public void write( final Kryo kryo, final Output output, final SplitRead splitRead ) {
                 splitRead.serialize(kryo, output);
@@ -254,7 +254,7 @@ public class BreakpointEvidence implements Comparable<BreakpointEvidence> {
             return super.toString() + " Indel " + cigar;
         }
 
-        private static final class Serializer extends com.esotericsoftware.kryo.Serializer<LargeIndel> {
+        public static final class Serializer extends com.esotericsoftware.kryo.Serializer<LargeIndel> {
             @Override
             public void write( final Kryo kryo, final Output output, final LargeIndel largeIndel ) {
                 largeIndel.serialize(kryo, output);
@@ -285,7 +285,7 @@ public class BreakpointEvidence implements Comparable<BreakpointEvidence> {
             return super.toString() + " UnmappedMate";
         }
 
-        private static final class Serializer extends com.esotericsoftware.kryo.Serializer<MateUnmapped> {
+        public static final class Serializer extends com.esotericsoftware.kryo.Serializer<MateUnmapped> {
             @Override
             public void write( final Kryo kryo, final Output output, final MateUnmapped mateUnmapped ) {
                 mateUnmapped.serialize(kryo, output);
@@ -339,7 +339,7 @@ public class BreakpointEvidence implements Comparable<BreakpointEvidence> {
             return super.toString() + " IntercontigPair " + otherContigIndex;
         }
 
-        private static final class Serializer extends com.esotericsoftware.kryo.Serializer<InterContigPair> {
+        public static final class Serializer extends com.esotericsoftware.kryo.Serializer<InterContigPair> {
             @Override
             public void write( final Kryo kryo, final Output output, final InterContigPair interContigPair ) {
                 interContigPair.serialize(kryo, output);
@@ -369,7 +369,7 @@ public class BreakpointEvidence implements Comparable<BreakpointEvidence> {
             return super.toString() + " OutiesPair";
         }
 
-        private static final class Serializer extends com.esotericsoftware.kryo.Serializer<OutiesPair> {
+        public static final class Serializer extends com.esotericsoftware.kryo.Serializer<OutiesPair> {
             @Override
             public void write( final Kryo kryo, final Output output, final OutiesPair mateUnmapped ) {
                 mateUnmapped.serialize(kryo, output);
@@ -399,7 +399,7 @@ public class BreakpointEvidence implements Comparable<BreakpointEvidence> {
             return super.toString() + " SameStrandPair";
         }
 
-        private static final class Serializer extends com.esotericsoftware.kryo.Serializer<SameStrandPair> {
+        public static final class Serializer extends com.esotericsoftware.kryo.Serializer<SameStrandPair> {
             @Override
             public void write( final Kryo kryo, final Output output, final SameStrandPair sameStrandPair ) {
                 sameStrandPair.serialize(kryo, output);
@@ -453,7 +453,7 @@ public class BreakpointEvidence implements Comparable<BreakpointEvidence> {
             return super.toString() + " TemplateSize " + templateSize;
         }
 
-        private static final class Serializer extends com.esotericsoftware.kryo.Serializer<WeirdTemplateSize> {
+        public static final class Serializer extends com.esotericsoftware.kryo.Serializer<WeirdTemplateSize> {
             @Override
             public void write( final Kryo kryo, final Output output, final WeirdTemplateSize weirdTemplateSize ) {
                 weirdTemplateSize.serialize(kryo, output);
@@ -464,17 +464,5 @@ public class BreakpointEvidence implements Comparable<BreakpointEvidence> {
                 return new WeirdTemplateSize(kryo, input);
             }
         }
-    }
-
-    static {
-        GATKRegistrator.registerRegistrator(kryo -> {
-            kryo.register(SplitRead.class, new SplitRead.Serializer());
-            kryo.register(LargeIndel.class, new LargeIndel.Serializer());
-            kryo.register(MateUnmapped.class, new MateUnmapped.Serializer());
-            kryo.register(InterContigPair.class, new InterContigPair.Serializer());
-            kryo.register(OutiesPair.class, new OutiesPair.Serializer());
-            kryo.register(SameStrandPair.class, new SameStrandPair.Serializer());
-            kryo.register(WeirdTemplateSize.class, new WeirdTemplateSize.Serializer());
-        });
     }
 }

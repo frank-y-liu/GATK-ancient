@@ -65,12 +65,12 @@ public class ReadMetadata {
 
     private void serialize( final Kryo kryo, final Output output ) {
         output.writeInt(contigNameToID.size());
-        for ( Map.Entry<String, Short> entry : contigNameToID.entrySet() ) {
+        for ( final Map.Entry<String, Short> entry : contigNameToID.entrySet() ) {
             kryo.writeObject(output, entry.getKey());
             output.writeShort(entry.getValue());
         }
         output.writeInt(readGroupToFragmentStatistics.size());
-        for ( Map.Entry<String, ReadGroupFragmentStatistics> entry : readGroupToFragmentStatistics.entrySet() ) {
+        for ( final Map.Entry<String, ReadGroupFragmentStatistics> entry : readGroupToFragmentStatistics.entrySet() ) {
             kryo.writeObjectOrNull(output, entry.getKey(), String.class);
             kryo.writeObject(output, entry.getValue());
         }
@@ -98,7 +98,7 @@ public class ReadMetadata {
 
     public int getMeanBasesPerTemplate() { return meanBasesPerTemplate; }
 
-    private static final class Serializer extends com.esotericsoftware.kryo.Serializer<ReadMetadata> {
+    public static final class Serializer extends com.esotericsoftware.kryo.Serializer<ReadMetadata> {
         @Override
         public void write( final Kryo kryo, final Output output, final ReadMetadata readMetadata ) {
             readMetadata.serialize(kryo, output);
@@ -132,7 +132,7 @@ public class ReadMetadata {
         public float getMedianFragmentSize() { return medianFragmentSize; }
         public float getMedianFragmentSizeVariance() { return medianFragmentSizeVariance; }
 
-        private static final class Serializer
+        public static final class Serializer
                 extends com.esotericsoftware.kryo.Serializer<ReadGroupFragmentStatistics> {
             @Override
             public void write( final Kryo kryo, final Output output,
@@ -146,12 +146,5 @@ public class ReadMetadata {
                 return new ReadGroupFragmentStatistics(kryo, input);
             }
         }
-    }
-
-    static {
-        GATKRegistrator.registerRegistrator(kryo -> {
-            kryo.register(ReadMetadata.class, new ReadMetadata.Serializer());
-            kryo.register(ReadMetadata.ReadGroupFragmentStatistics.class, new ReadGroupFragmentStatistics.Serializer());
-        });
     }
 }

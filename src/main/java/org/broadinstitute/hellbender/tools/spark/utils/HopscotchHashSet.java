@@ -4,7 +4,6 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.google.common.annotations.VisibleForTesting;
-import org.broadinstitute.hellbender.engine.spark.GATKRegistrator;
 
 import java.util.*;
 
@@ -413,7 +412,7 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> {
         throw new IllegalStateException("Unable to increase capacity.");
     }
 
-    private static final class Serializer<T> extends com.esotericsoftware.kryo.Serializer<HopscotchHashSet<T>> {
+    public static final class Serializer<T> extends com.esotericsoftware.kryo.Serializer<HopscotchHashSet<T>> {
         @Override
         public void write( final Kryo kryo, final Output output, final HopscotchHashSet<T> hopscotchHashSet ) {
             hopscotchHashSet.serialize(kryo, output);
@@ -466,10 +465,5 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> {
             }
             return index;
         }
-    }
-
-    static {
-        GATKRegistrator.registerRegistrator(kryo ->
-                kryo.register(HopscotchHashSet.class, new HopscotchHashSet.Serializer<Object>()));
     }
 }

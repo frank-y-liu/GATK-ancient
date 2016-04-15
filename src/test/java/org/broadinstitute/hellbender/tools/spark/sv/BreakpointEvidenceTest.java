@@ -71,7 +71,13 @@ public class BreakpointEvidenceTest extends BaseTest {
         final ByteArrayOutputStream bos = new ByteArrayOutputStream();
         final Output out = new Output(bos);
         final Kryo kryo = new Kryo();
-        new GATKRegistrator().registerClasses(kryo);
+        kryo.register(BreakpointEvidence.SplitRead.class, new BreakpointEvidence.SplitRead.Serializer());
+        kryo.register(BreakpointEvidence.LargeIndel.class, new BreakpointEvidence.LargeIndel.Serializer());
+        kryo.register(BreakpointEvidence.MateUnmapped.class, new BreakpointEvidence.MateUnmapped.Serializer());
+        kryo.register(BreakpointEvidence.InterContigPair.class, new BreakpointEvidence.InterContigPair.Serializer());
+        kryo.register(BreakpointEvidence.OutiesPair.class, new BreakpointEvidence.OutiesPair.Serializer());
+        kryo.register(BreakpointEvidence.SameStrandPair.class, new BreakpointEvidence.SameStrandPair.Serializer());
+        kryo.register(BreakpointEvidence.WeirdTemplateSize.class, new BreakpointEvidence.WeirdTemplateSize.Serializer());
         kryo.writeClassAndObject(out, evidenceList);
         out.flush();
 

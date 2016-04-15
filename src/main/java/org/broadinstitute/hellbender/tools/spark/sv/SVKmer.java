@@ -250,7 +250,7 @@ public class SVKmer implements Comparable<SVKmer> {
         return result;
     }
 
-    private static final class Serializer extends com.esotericsoftware.kryo.Serializer<SVKmer> {
+    public static final class Serializer extends com.esotericsoftware.kryo.Serializer<SVKmer> {
         @Override
         public void write(final Kryo kryo, final Output output, final SVKmer svKmer ) {
             svKmer.serialize(kryo, output);
@@ -260,9 +260,5 @@ public class SVKmer implements Comparable<SVKmer> {
         public SVKmer read(final Kryo kryo, final Input input, final Class<SVKmer> klass ) {
             return new SVKmer(kryo, input);
         }
-    }
-
-    static {
-        GATKRegistrator.registerRegistrator(kryo -> kryo.register(SVKmer.class, new SVKmer.Serializer()));
     }
 }

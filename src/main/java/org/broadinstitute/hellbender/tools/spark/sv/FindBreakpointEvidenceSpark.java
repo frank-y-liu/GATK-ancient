@@ -11,6 +11,7 @@ import htsjdk.samtools.fastq.FastqWriterFactory;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
+import org.apache.spark.serializer.KryoRegistrator;
 import org.broadinstitute.hellbender.cmdline.Argument;
 import org.broadinstitute.hellbender.cmdline.CommandLineProgramProperties;
 import org.broadinstitute.hellbender.cmdline.StandardArgumentDefinitions;
@@ -820,12 +821,28 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
         }
     }
 
-    static {
-        GATKRegistrator.registerRegistrator(kryo -> {
+    public static final class Registrator implements KryoRegistrator {
+        @Override
+        public void registerClasses( final Kryo kryo ) {
+            new GATKRegistrator().registerClasses(kryo);
+            kryo.register(Object[].class);
+            kryo.register(java.util.ArrayList.class);
+            kryo.register(htsjdk.samtools.fastq.FastqRecord.class);
+            kryo.register(BreakpointEvidence.SplitRead.class, new BreakpointEvidence.SplitRead.Serializer());
+            kryo.register(BreakpointEvidence.LargeIndel.class, new BreakpointEvidence.LargeIndel.Serializer());
+            kryo.register(BreakpointEvidence.MateUnmapped.class, new BreakpointEvidence.MateUnmapped.Serializer());
+            kryo.register(BreakpointEvidence.InterContigPair.class, new BreakpointEvidence.InterContigPair.Serializer());
+            kryo.register(BreakpointEvidence.OutiesPair.class, new BreakpointEvidence.OutiesPair.Serializer());
+            kryo.register(BreakpointEvidence.SameStrandPair.class, new BreakpointEvidence.SameStrandPair.Serializer());
+            kryo.register(BreakpointEvidence.WeirdTemplateSize.class, new BreakpointEvidence.WeirdTemplateSize.Serializer());
+            kryo.register(SVKmer.class, new SVKmer.Serializer());
+            kryo.register(HopscotchHashSet.class, new HopscotchHashSet.Serializer<>());
+            kryo.register(ReadMetadata.class, new ReadMetadata.Serializer());
+            kryo.register(ReadMetadata.ReadGroupFragmentStatistics.class, new ReadMetadata.ReadGroupFragmentStatistics.Serializer());
             kryo.register(ReadCountAndLength.class, new ReadCountAndLength.Serializer());
             kryo.register(Interval.class, new Interval.Serializer());
             kryo.register(QNameAndInterval.class, new QNameAndInterval.Serializer());
             kryo.register(KmerAndInterval.class, new KmerAndInterval.Serializer());
-        });
+        }
     }
 }
