@@ -6,6 +6,7 @@ import com.esotericsoftware.kryo.io.Output;
 import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMReadGroupRecord;
 import htsjdk.samtools.SAMSequenceRecord;
+import org.apache.spark.serializer.KryoRegistrator;
 import org.broadinstitute.hellbender.engine.spark.GATKRegistrator;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 
@@ -145,6 +146,14 @@ public class ReadMetadata {
                                                      final Class<ReadGroupFragmentStatistics> klass ) {
                 return new ReadGroupFragmentStatistics(kryo, input);
             }
+        }
+    }
+
+    public static final class Registrator implements KryoRegistrator {
+        @Override
+        public void registerClasses( final Kryo kryo ) {
+            kryo.register(ReadMetadata.class, new ReadMetadata.Serializer());
+            kryo.register(ReadGroupFragmentStatistics.class, new ReadGroupFragmentStatistics.Serializer());
         }
     }
 }

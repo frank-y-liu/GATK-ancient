@@ -84,8 +84,8 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
 
         // Process the input again, this time pulling all reads that contain kmers associated with a given breakpoint,
         // and writing those reads into a separate FASTQ for each breakpoint.
-        final Broadcast<HopscotchHashSet<KmerAndInterval>> broadcastKmerAndIntervals =
-                ctx.broadcast(new HopscotchHashSet<>(getKmerIntervals(ctx)));
+        final Broadcast<List<KmerAndInterval>> broadcastKmerAndIntervals =
+                ctx.broadcast(getKmerIntervals(ctx));
         getUnfilteredReads()
             .filter(read ->
                     !read.isSecondaryAlignment() && !read.isSupplementaryAlignment() &&
@@ -109,8 +109,8 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
         final PipelineOptions pipelineOptions = getAuthenticatedGCSOptions();
         final Broadcast<Set<SVKmer>> broadcastKmerKillList =
                 ctx.broadcast(SVKmer.readKmersFile(kmersToIgnoreFilename, pipelineOptions));
-        final Broadcast<HopscotchHashSet<QNameAndInterval>> broadcastQNameAndIntervals =
-                ctx.broadcast(new HopscotchHashSet<>(getQNames(ctx)));
+        final Broadcast<List<QNameAndInterval>> broadcastQNameAndIntervals =
+                ctx.broadcast(getQNames(ctx));
 
         final JavaRDD<GATKRead> unfilteredReads = getUnfilteredReads();
         final int nPartitions = unfilteredReads.partitions().size();
@@ -697,9 +697,9 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
         private final Set<SVKmer> kmersToIgnore;
         private final HopscotchHashSet<KmerAndInterval> kmerSet;
 
-        QNameKmerizer( final HopscotchHashSet<QNameAndInterval> qNameAndIntervalSet,
+        QNameKmerizer( final List<QNameAndInterval> qNameAndIntervalList,
                               final Set<SVKmer> kmersToIgnore ) {
-            this.qNameAndIntervalSet = qNameAndIntervalSet;
+            this.qNameAndIntervalSet = new HopscotchHashSet<>(qNameAndIntervalList);
             this.kmersToIgnore = kmersToIgnore;
             this.kmerSet = new HopscotchHashSet<>(1000000);
         }
@@ -795,8 +795,8 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
         private final Set<Integer> intervalIds = new HashSet<>();
         private final List<Tuple2<Integer, FastqRecord>> tuples = new ArrayList<>();
 
-        ReadsForIntervalFinder(final HopscotchHashSet<KmerAndInterval> kmerAndIntervalSet) {
-            this.kmerAndIntervalSet = kmerAndIntervalSet;
+        ReadsForIntervalFinder(final List<KmerAndInterval> kmerAndIntervalList) {
+            this.kmerAndIntervalSet = new HopscotchHashSet<>(kmerAndIntervalList);
         }
 
         public Iterator<Tuple2<Integer, FastqRecord>> apply(final GATKRead read) {
@@ -825,20 +825,12 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
         @Override
         public void registerClasses( final Kryo kryo ) {
             new GATKRegistrator().registerClasses(kryo);
+            new BreakpointEvidence.Registrator().registerClasses(kryo);
+            new SVKmer.Registrator().registerClasses(kryo);
+            new ReadMetadata.Registrator().registerClasses(kryo);
             kryo.register(Object[].class);
             kryo.register(java.util.ArrayList.class);
             kryo.register(htsjdk.samtools.fastq.FastqRecord.class);
-            kryo.register(BreakpointEvidence.SplitRead.class, new BreakpointEvidence.SplitRead.Serializer());
-            kryo.register(BreakpointEvidence.LargeIndel.class, new BreakpointEvidence.LargeIndel.Serializer());
-            kryo.register(BreakpointEvidence.MateUnmapped.class, new BreakpointEvidence.MateUnmapped.Serializer());
-            kryo.register(BreakpointEvidence.InterContigPair.class, new BreakpointEvidence.InterContigPair.Serializer());
-            kryo.register(BreakpointEvidence.OutiesPair.class, new BreakpointEvidence.OutiesPair.Serializer());
-            kryo.register(BreakpointEvidence.SameStrandPair.class, new BreakpointEvidence.SameStrandPair.Serializer());
-            kryo.register(BreakpointEvidence.WeirdTemplateSize.class, new BreakpointEvidence.WeirdTemplateSize.Serializer());
-            kryo.register(SVKmer.class, new SVKmer.Serializer());
-            kryo.register(HopscotchHashSet.class, new HopscotchHashSet.Serializer<>());
-            kryo.register(ReadMetadata.class, new ReadMetadata.Serializer());
-            kryo.register(ReadMetadata.ReadGroupFragmentStatistics.class, new ReadMetadata.ReadGroupFragmentStatistics.Serializer());
             kryo.register(ReadCountAndLength.class, new ReadCountAndLength.Serializer());
             kryo.register(Interval.class, new Interval.Serializer());
             kryo.register(QNameAndInterval.class, new QNameAndInterval.Serializer());

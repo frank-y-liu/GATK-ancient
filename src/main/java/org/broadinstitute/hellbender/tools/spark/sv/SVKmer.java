@@ -4,6 +4,7 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.google.cloud.dataflow.sdk.options.PipelineOptions;
+import org.apache.spark.serializer.KryoRegistrator;
 import org.broadinstitute.hellbender.engine.spark.GATKRegistrator;
 import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.tools.spark.utils.HopscotchHashSet;
@@ -250,7 +251,7 @@ public class SVKmer implements Comparable<SVKmer> {
         return result;
     }
 
-    public static final class Serializer extends com.esotericsoftware.kryo.Serializer<SVKmer> {
+    private static final class Serializer extends com.esotericsoftware.kryo.Serializer<SVKmer> {
         @Override
         public void write(final Kryo kryo, final Output output, final SVKmer svKmer ) {
             svKmer.serialize(kryo, output);
@@ -259,6 +260,13 @@ public class SVKmer implements Comparable<SVKmer> {
         @Override
         public SVKmer read(final Kryo kryo, final Input input, final Class<SVKmer> klass ) {
             return new SVKmer(kryo, input);
+        }
+    }
+
+    public static final class Registrator implements KryoRegistrator {
+        @Override
+        public void registerClasses( final Kryo kryo ) {
+            kryo.register(SVKmer.class, new SVKmer.Serializer());
         }
     }
 }

@@ -4,6 +4,7 @@ import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.google.common.annotations.VisibleForTesting;
+import org.apache.spark.serializer.KryoRegistrator;
 
 import java.util.*;
 
@@ -412,18 +413,6 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> {
         throw new IllegalStateException("Unable to increase capacity.");
     }
 
-    public static final class Serializer<T> extends com.esotericsoftware.kryo.Serializer<HopscotchHashSet<T>> {
-        @Override
-        public void write( final Kryo kryo, final Output output, final HopscotchHashSet<T> hopscotchHashSet ) {
-            hopscotchHashSet.serialize(kryo, output);
-        }
-
-        @Override
-        public HopscotchHashSet<T> read( final Kryo kryo, final Input input, final Class<HopscotchHashSet<T>> klass ) {
-            return new HopscotchHashSet<>(kryo, input);
-        }
-    }
-
     private final class BucketIterator implements Iterator<T> {
         private int bucketIndex;
 
@@ -464,6 +453,25 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> {
                 index -= 1;
             }
             return index;
+        }
+    }
+
+    private static final class Serializer<T> extends com.esotericsoftware.kryo.Serializer<HopscotchHashSet<T>> {
+        @Override
+        public void write( final Kryo kryo, final Output output, final HopscotchHashSet<T> hopscotchHashSet ) {
+            hopscotchHashSet.serialize(kryo, output);
+        }
+
+        @Override
+        public HopscotchHashSet<T> read( final Kryo kryo, final Input input, final Class<HopscotchHashSet<T>> klass ) {
+            return new HopscotchHashSet<>(kryo, input);
+        }
+    }
+
+    public static final class Registrator implements KryoRegistrator {
+        @Override
+        public void registerClasses( final Kryo kryo ) {
+            kryo.register(HopscotchHashSet.class, new HopscotchHashSet.Serializer<>());
         }
     }
 }
