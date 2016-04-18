@@ -156,7 +156,29 @@ public final class PrintReadsIntegrationTest extends CommandLineProgramTest{
         //output has both GATK PrintReads and GATK PrintReads.1 in headers
         Assert.assertNotNull(SamReaderFactory.makeDefault().open(outFile).getFileHeader().getProgramRecord("GATK PrintReads"));
         Assert.assertNotNull(SamReaderFactory.makeDefault().open(outFile).getFileHeader().getProgramRecord("GATK PrintReads.1"));
+    }
 
+    @Test
+    public void testPGOnByDefault() throws IOException {
+        final File inFile = new File(TEST_DATA_DIR, "print_reads_withPG.sam");
+        final File outFile = BaseTest.createTempFile("testNoConflictRG", ".sam");
+        final String[] args = new String[] {
+                //NOTE: no addOutputSAMProgramRecord argument
+                "--input" , inFile.getAbsolutePath(),
+                "--output", outFile.getAbsolutePath()
+        };
+        runCommandLine(args);
+
+        //Make sure contents are the same
+        SamAssertionUtils.assertSamsEqual(outFile, inFile);
+
+        //input has GATK PrintReads not NOT GATK PrintReads.1 in headers
+        Assert.assertNotNull(SamReaderFactory.makeDefault().open(inFile).getFileHeader().getProgramRecord("GATK PrintReads"));
+        Assert.assertNull(SamReaderFactory.makeDefault().open(inFile).getFileHeader().getProgramRecord("GATK PrintReads.1"));
+
+        //output has both GATK PrintReads and GATK PrintReads.1 in headers
+        Assert.assertNotNull(SamReaderFactory.makeDefault().open(outFile).getFileHeader().getProgramRecord("GATK PrintReads"));
+        Assert.assertNotNull(SamReaderFactory.makeDefault().open(outFile).getFileHeader().getProgramRecord("GATK PrintReads.1"));
     }
 
     @DataProvider(name = "UnmappedReadInclusionTestData")
