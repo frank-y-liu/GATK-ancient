@@ -71,8 +71,8 @@ public final class BwaSpark extends GATKSparkTool {
                 String name1 = pairedEndPrefix(read1.getName());
                 String name2 = pairedEndPrefix(read2.getName());
                 return new Tuple2<>(
-                        new ShortRead(name1, read1.getBases(), read1.getBaseQualities()),
-                        new ShortRead(name2, read2.getBases(), read2.getBaseQualities()));
+                        new ShortRead(name1, read1.getBases(), SAMUtils.phredToFastq(read1.getBaseQualities()).getBytes()),
+                        new ShortRead(name2, read2.getBases(), SAMUtils.phredToFastq(read2.getBaseQualities()).getBytes()));
             });
 
             // Load native library in each task VM
