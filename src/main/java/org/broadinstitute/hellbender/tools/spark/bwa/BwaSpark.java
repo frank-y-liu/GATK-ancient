@@ -3,10 +3,8 @@ package org.broadinstitute.hellbender.tools.spark.bwa;
 import com.github.lindenb.jbwa.jni.BwaIndex;
 import com.github.lindenb.jbwa.jni.BwaMem;
 import com.github.lindenb.jbwa.jni.ShortRead;
-import com.google.common.base.Function;
 import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.Iterators;
-import com.google.common.collect.UnmodifiableIterator;
 import htsjdk.samtools.*;
 import htsjdk.samtools.reference.ReferenceSequence;
 import htsjdk.samtools.reference.ReferenceSequenceFile;
@@ -28,7 +26,6 @@ import org.broadinstitute.hellbender.utils.read.SAMRecordToGATKReadAdapter;
 import org.seqdoop.hadoop_bam.BAMInputFormat;
 import scala.Tuple2;
 
-import javax.annotation.Nullable;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
@@ -85,7 +82,8 @@ public final class BwaSpark extends GATKSparkTool {
 
             final Broadcast<BwaMem> memBroadcast = ctx.broadcast(mem); // TODO: does this work with native code?
 
-            JavaRDD<String> samLines = shortReadPairs.mapPartitions(iter -> () -> concat(batchIterator(memBroadcast, iter)));
+            int batchSize = 50; // TODO: the whole partition?
+            JavaRDD<String> samLines = shortReadPairs.mapPartitions(iter -> () -> concat(batchIterator(memBroadcast, iter, batchSize)));
 
             // TODO: is there a better way to build a header? E.g. from the BAM
             final SAMSequenceDictionary sequences = makeSequenceDictionary(new File(ref));
@@ -115,27 +113,21 @@ public final class BwaSpark extends GATKSparkTool {
         return Iterators.partition(iter, 2);
     }
 
-    private Iterator<List<String>> batchIterator(final Broadcast<BwaMem> memBroadcast, Iterator<Tuple2<ShortRead, ShortRead>> iter) {
-        UnmodifiableIterator<List<Tuple2<ShortRead, ShortRead>>> batches = Iterators.partition(iter, 50);
-        Iterator<List<String>> it = Iterators.transform(batches, new Function<List<Tuple2<ShortRead, ShortRead>>, List<String>>() {
-            @Nullable
-            @Override
-            public List<String> apply(@Nullable List<Tuple2<ShortRead, ShortRead>> input) {
-                List<ShortRead> reads1 = new ArrayList<>();
-                List<ShortRead> reads2 = new ArrayList<>();
-                for (Tuple2<ShortRead, ShortRead> p : input) {
-                    reads1.add(p._1);
-                    reads2.add(p._2);
-                }
-                try {
-                    String[] alignments = memBroadcast.getValue().align(reads1, reads2);
-                    return Arrays.asList(alignments);
-                } catch (IOException e) {
-                    throw new GATKException(e.toString());
-                }
+    private Iterator<List<String>> batchIterator(final Broadcast<BwaMem> memBroadcast, Iterator<Tuple2<ShortRead, ShortRead>> iter, int batchSize) {
+        return Iterators.transform(Iterators.partition(iter, batchSize), input -> {
+            List<ShortRead> reads1 = new ArrayList<>();
+            List<ShortRead> reads2 = new ArrayList<>();
+            for (Tuple2<ShortRead, ShortRead> p : input) {
+                reads1.add(p._1);
+                reads2.add(p._2);
+            }
+            try {
+                String[] alignments = memBroadcast.getValue().align(reads1, reads2);
+                return Arrays.asList(alignments);
+            } catch (IOException e) {
+                throw new GATKException(e.toString());
             }
         });
-        return it;
     }
 
     static <T> Iterator<T> concat(Iterator<? extends Iterable<T>> iterator) {
