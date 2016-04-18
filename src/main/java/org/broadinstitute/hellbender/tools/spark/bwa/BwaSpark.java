@@ -13,8 +13,6 @@ import htsjdk.samtools.reference.ReferenceSequenceFile;
 import htsjdk.samtools.reference.ReferenceSequenceFileFactory;
 import htsjdk.samtools.util.StringUtil;
 import org.apache.commons.collections4.iterators.IteratorIterable;
-import org.apache.hadoop.io.Text;
-import org.apache.spark.api.java.JavaPairRDD;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.broadcast.Broadcast;
@@ -27,8 +25,7 @@ import org.broadinstitute.hellbender.exceptions.GATKException;
 import org.broadinstitute.hellbender.exceptions.UserException;
 import org.broadinstitute.hellbender.utils.read.GATKRead;
 import org.broadinstitute.hellbender.utils.read.SAMRecordToGATKReadAdapter;
-import org.seqdoop.hadoop_bam.FastqInputFormat;
-import org.seqdoop.hadoop_bam.SequencedFragment;
+import org.seqdoop.hadoop_bam.BAMInputFormat;
 import scala.Tuple2;
 
 import javax.annotation.Nullable;
@@ -62,17 +59,19 @@ public final class BwaSpark extends GATKSparkTool {
     protected void runTool(final JavaSparkContext ctx) {
         System.loadLibrary("bwajni");
         try {
-            // TODO: set property to keep paired reads together in same split
+            ctx.hadoopConfiguration().setBoolean(BAMInputFormat.KEEP_PAIRED_READS_TOGETHER_PROPERTY, true); // TODO: need to make this work even for non-queryname sorted BAM
             JavaRDD<GATKRead> unalignedReads = getReads();
             JavaRDD<List<GATKRead>> unalignedPairs = unalignedReads.mapPartitions(iter -> () -> pairwise(iter));
             JavaRDD<Tuple2<ShortRead, ShortRead>> shortReadPairs = unalignedPairs.map(p -> {
                 GATKRead read1 = p.get(0);
                 GATKRead read2 = p.get(1);
-                String name1 = pairedEndPrefix(read1.getName());
-                String name2 = pairedEndPrefix(read2.getName());
+                String name1 = read1.getName();
+                String name2 = read2.getName();
+                byte[] baseQualities1 = SAMUtils.phredToFastq(read1.getBaseQualities()).getBytes();
+                byte[] baseQualities2 = SAMUtils.phredToFastq(read2.getBaseQualities()).getBytes();
                 return new Tuple2<>(
-                        new ShortRead(name1, read1.getBases(), SAMUtils.phredToFastq(read1.getBaseQualities()).getBytes()),
-                        new ShortRead(name2, read2.getBases(), SAMUtils.phredToFastq(read2.getBaseQualities()).getBytes()));
+                        new ShortRead(name1, read1.getBases(), baseQualities1),
+                        new ShortRead(name2, read2.getBases(), baseQualities2));
             });
 
             // Load native library in each task VM
@@ -156,10 +155,6 @@ public final class BwaSpark extends GATKSparkTool {
                 return endOfData();
             }
         };
-    }
-
-    private static String pairedEndPrefix(String pairedEndName) {
-        return pairedEndName.substring(0, pairedEndName.length() - 2); // TODO: do something like Picard's FastqToSam#getBaseName
     }
 
     // From CreateSequenceDictionary
