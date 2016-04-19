@@ -93,12 +93,12 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
             .mapPartitionsToPair(readItr ->
                     new MapPartitioner<>(readItr, new ReadsForIntervalFinder(broadcastKmerAndIntervalsSet.value())), false)
             .groupByKey()
-            .foreach(intervalReads -> writeFastq(intervalReads,outputDir));
+            .foreach(intervalReads -> writeFastq(intervalReads, outputDir));
 
         log("Wrote assembly FASTQs.");
     }
 
-    private void writeFastq( final Tuple2<Integer,Iterable<FastqRecord>> intervalReads, final String outputDir ) {
+    private void writeFastq( final Tuple2<Integer, Iterable<FastqRecord>> intervalReads, final String outputDir ) {
         final File fastqName = new File(outputDir, "assembly" + intervalReads._1 + ".fastq");
         try ( final FastqWriter writer = new FastqWriterFactory().newWriter(fastqName) ) {
             intervalReads._2.forEach(writer::write);
@@ -580,7 +580,7 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
             return Arrays.equals(this.qName, that.qName) && this.intervalId == that.intervalId;
         }
 
-        public boolean sameName( final byte[] name ) { return Arrays.equals(qName,name); }
+        public boolean sameName( final byte[] name ) { return Arrays.equals(qName, name); }
 
         public String toString() { return new String(qName)+" "+intervalId; }
 
@@ -704,9 +704,11 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
                               final Set<SVKmer> kmersToIgnore ) {
             this.qNameAndIntervalSet = qNameAndIntervalSet;
             this.kmersToIgnore = kmersToIgnore;
+            System.out.println("QNameKmerizer instantiated.");
         }
 
         public Iterator<KmerAndInterval> apply( final GATKRead read ) {
+            System.out.println("QNameKmerizer applied.");
             final String qName = read.getName();
             final int qNameHash = qName.hashCode();
             final byte[] qNameBytes = qName.getBytes();
