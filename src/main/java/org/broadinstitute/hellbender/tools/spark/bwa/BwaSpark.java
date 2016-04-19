@@ -47,6 +47,10 @@ public final class BwaSpark extends GATKSparkTool {
             fullName = StandardArgumentDefinitions.OUTPUT_LONG_NAME, optional = false)
     private String output;
 
+    @Argument(doc = "the number of read pairs to send in a batch to BWA", shortName = "batchSize",
+            fullName = "batchSize", optional = true)
+    private int batchSize = 50;
+
     @Override
     public boolean requiresReads() {
         return true;
@@ -82,7 +86,6 @@ public final class BwaSpark extends GATKSparkTool {
 
             final Broadcast<BwaMem> memBroadcast = ctx.broadcast(mem); // TODO: does this work with native code?
 
-            int batchSize = 50; // TODO: the whole partition?
             JavaRDD<String> samLines = shortReadPairs.mapPartitions(iter -> () -> concat(batchIterator(memBroadcast, iter, batchSize)));
 
             // TODO: is there a better way to build a header? E.g. from the BAM
@@ -109,7 +112,7 @@ public final class BwaSpark extends GATKSparkTool {
         }
     }
 
-    private <U> Iterator<List<GATKRead>> pairwise(Iterator<GATKRead> iter) {
+    private <U> Iterator<List<U>> pairwise(Iterator<U> iter) {
         return Iterators.partition(iter, 2);
     }
 
