@@ -373,8 +373,10 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> {
         capacity = bumpCapacity(capacity);
         buckets = (T[])new Object[capacity];
         status = new byte[capacity];
-        for ( final T entry : oldBuckets ) {
-            if ( entry != null ) insert(entry);
+        if ( oldBuckets != null ) { // can never be null if constructors are used, but Kryo does some sneaky stuff
+            for (final T entry : oldBuckets) {
+                if (entry != null) insert(entry);
+            }
         }
     }
 
@@ -456,7 +458,7 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> {
         }
     }
 
-    private static final class Serializer<T> extends com.esotericsoftware.kryo.Serializer<HopscotchHashSet<T>> {
+    public static final class Serializer<T> extends com.esotericsoftware.kryo.Serializer<HopscotchHashSet<T>> {
         @Override
         public void write( final Kryo kryo, final Output output, final HopscotchHashSet<T> hopscotchHashSet ) {
             hopscotchHashSet.serialize(kryo, output);

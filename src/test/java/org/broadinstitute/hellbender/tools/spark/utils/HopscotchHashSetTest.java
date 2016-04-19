@@ -1,9 +1,14 @@
 package org.broadinstitute.hellbender.tools.spark.utils;
 
+import com.esotericsoftware.kryo.Kryo;
+import com.esotericsoftware.kryo.io.Input;
+import com.esotericsoftware.kryo.io.Output;
 import org.broadinstitute.hellbender.utils.test.BaseTest;
 import org.testng.Assert;
 import org.testng.annotations.Test;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Random;
@@ -72,6 +77,35 @@ public class HopscotchHashSetTest extends BaseTest {
             for ( final Integer val : hhashSet ) {
                 Assert.assertTrue(hashSet.contains(val), trialMsg+", testVal="+val);
             }
+        }
+    }
+
+    @Test(groups = "spark")
+    void serializationTest() {
+        final Random rng = new Random(0xdeadf00);
+        final HopscotchHashSet<Integer> hHashSet = new HopscotchHashSet<>(HHASH_NVALS);
+        for ( int valNo = 0; valNo != HHASH_NVALS; ++valNo ) {
+            hHashSet.add(rng.nextInt());
+        }
+
+        final ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        final Output out = new Output(bos);
+        final Kryo kryo = new Kryo();
+        new HopscotchHashSet.Registrator().registerClasses(kryo);
+        kryo.writeClassAndObject(out, hHashSet);
+        out.flush();
+
+        final ByteArrayInputStream bis = new ByteArrayInputStream(bos.toByteArray());
+        final Input in = new Input(bis);
+        @SuppressWarnings("unchecked")
+        final HopscotchHashSet<Integer> hHashSet2 = (HopscotchHashSet<Integer>)kryo.readClassAndObject(in);
+
+        Assert.assertEquals(hHashSet.size(), hHashSet2.size());
+        for ( final Integer val : hHashSet ) {
+            Assert.assertTrue(hHashSet2.contains(val));
+        }
+        for ( final Integer val : hHashSet2 ) {
+            Assert.assertTrue(hHashSet.contains(val));
         }
     }
 }
