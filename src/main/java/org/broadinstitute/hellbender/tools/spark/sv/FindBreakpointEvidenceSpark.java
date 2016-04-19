@@ -121,7 +121,7 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
                         .mapPartitions(readItr ->
                                 new QNameKmerizer(broadcastQNameAndIntervalsSet.value(),
                                                     broadcastKmerKillSet.value()).call(readItr), false)
-                        .repartition(nPartitions)
+                        .distinct()
                         .mapPartitions(kmerItr -> new KmerCleaner().call(kmerItr))
                         .collect();
 
@@ -719,6 +719,7 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
                                 .filter(kmer -> !kmersToIgnore.contains(kmer))
                                 .map(kmer -> new KmerAndInterval(kmer, qNameAndInterval.getIntervalId()))
                                 .forEach(kmerSet::add);
+                        break;
                     }
                 }
             }
