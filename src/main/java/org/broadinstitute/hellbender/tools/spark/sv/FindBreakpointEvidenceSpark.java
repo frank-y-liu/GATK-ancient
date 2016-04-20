@@ -5,6 +5,7 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.google.cloud.dataflow.sdk.options.PipelineOptions;
 import htsjdk.samtools.*;
+import htsjdk.samtools.fastq.BasicFastqWriter;
 import htsjdk.samtools.fastq.FastqRecord;
 import htsjdk.samtools.fastq.FastqWriter;
 import htsjdk.samtools.fastq.FastqWriterFactory;
@@ -99,8 +100,10 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
     }
 
     private void writeFastq( final Tuple2<Integer, Iterable<FastqRecord>> intervalReads, final String outputDir ) {
-        final File fastqName = new File(outputDir, "assembly" + intervalReads._1 + ".fastq");
-        try ( final FastqWriter writer = new FastqWriterFactory().newWriter(fastqName) ) {
+        String fileName = outputDir + "/assembly" + intervalReads._1 + ".fastq";
+        PipelineOptions popts = null;
+        try ( final BasicFastqWriter writer =
+                      new BasicFastqWriter(new PrintStream(BucketUtils.createFile(fileName, popts))) ) {
             intervalReads._2.forEach(writer::write);
         }
     }
