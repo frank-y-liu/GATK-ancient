@@ -303,6 +303,11 @@ public final class ClipReads extends ReadWalker {
 
     @Override
     public ClippingData onTraversalSuccess(){
+        return accumulator;
+    }
+
+    @Override
+    public void onTraversalDone() {
         if ( outputStats != null ){
             outputStats.printf(accumulator.toString());
             outputStats.close();
@@ -310,8 +315,8 @@ public final class ClipReads extends ReadWalker {
         if ( outputBam != null ) {
             outputBam.close();
         }
-        return accumulator;
     }
+
     /**
      * Helper function that adds a seq with name and bases (as bytes) to the list of sequences to be clipped
      *
