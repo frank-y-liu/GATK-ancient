@@ -704,11 +704,9 @@ public final class FindBreakpointEvidenceSpark extends GATKSparkTool {
                               final Set<SVKmer> kmersToIgnore ) {
             this.qNameAndIntervalSet = qNameAndIntervalSet;
             this.kmersToIgnore = kmersToIgnore;
-            System.out.println("QNameKmerizer instantiated.");
         }
 
         public Iterator<KmerAndInterval> apply( final GATKRead read ) {
-            System.out.println("QNameKmerizer applied.");
             final String qName = read.getName();
             final int qNameHash = qName.hashCode();
             final byte[] qNameBytes = qName.getBytes();

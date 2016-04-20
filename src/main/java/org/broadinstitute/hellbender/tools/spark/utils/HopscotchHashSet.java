@@ -370,13 +370,14 @@ public final class HopscotchHashSet<T> extends AbstractSet<T> {
     @SuppressWarnings("unchecked")
     private void resize() {
         final T[] oldBuckets = buckets;
+        if ( oldBuckets == null ) throw new IllegalStateException("OMG I have no buckets.");
+
         capacity = bumpCapacity(capacity);
         buckets = (T[])new Object[capacity];
         status = new byte[capacity];
-        if ( oldBuckets != null ) { // can never be null if constructors are used, but Kryo does some sneaky stuff
-            for (final T entry : oldBuckets) {
-                if (entry != null) insert(entry);
-            }
+
+        for (final T entry : oldBuckets) {
+            if (entry != null) insert(entry);
         }
     }
 
