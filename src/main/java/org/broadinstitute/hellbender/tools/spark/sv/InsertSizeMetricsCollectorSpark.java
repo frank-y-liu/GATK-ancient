@@ -37,8 +37,8 @@ public final class InsertSizeMetricsCollectorSpark implements Serializable{
                                            final List<SAMReadGroupRecord> samRgRecords,
                                            final double HistogramMADTolerance) {
 
-        final JavaRDD<Integer> lengthRDD = filteredReads.map(read -> Math.abs(read.getFragmentLength()) );
-        lengthRDD.cache();
+        JavaRDD<Integer> lengthRDD = filteredReads.map(read -> Math.abs(read.getFragmentLength()) );
+        lengthRDD = lengthRDD.cache();
 
         metrics.READ_PAIRS = filteredReads.count();
 
@@ -186,8 +186,9 @@ public final class InsertSizeMetricsCollectorSpark implements Serializable{
         metrics.READ_GROUP = null;
     }
 
+    // Why is this "VisibleForTesting" ? Isn't is part of the metric collection ?
     @VisibleForTesting
-    void produceMetricsFile(final MetricsFile<InsertSizeMetrics, Integer> metricsFile) {
+    public void produceMetricsFile(final MetricsFile<InsertSizeMetrics, Integer> metricsFile) {
         metricsFile.addHistogram(htslibHistogram);
         metricsFile.addMetric(metrics);
     }
