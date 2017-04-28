@@ -1,0 +1,15 @@
+## Note this syntax is for exome only. Remove the interval list to run on whole genome. 
+## 
+## same issue with the interval list
+ 
+$GATK_HOME/gatk-launch \
+    FlagStatSpark \
+    -I $HDFS_INPUT/WGS-G94982-NA12878.bam \
+    -L Broad.human.exome.b37.interval_list \
+    -O $HDFS_OUTPUT/Test_WES_Flagstat \
+    -- \
+    --sparkRunner <sparkrunner> \
+    --sparkMaster <sparkmaster> \
+    --executor-cores <num_cores> \
+    --executor-memory <exec_mem> \
+    --driver-memory <driver_mem>

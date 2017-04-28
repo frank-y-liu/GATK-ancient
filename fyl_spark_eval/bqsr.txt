@@ -1,0 +1,17 @@
+## This function computes the BQSR table. 
+## 
+## see other readme file on how to prepare index knowsite dbsnp file 
+##
+$GATK_HOME/gatk-launch \
+    BaseRecalibratorSpark \
+    -I $HDFS_INPUT/WGS-G94982-NA12878.bam \
+    -knownSites $SNP_INPUT/dbsnp_138.hg19.vcf.gz \
+    -L Broad.human.exome.b37.interval_list \
+    -R $HDFS_INPUT/human_g1k_v37.2bit \
+    -O $HDFS_OUTPUT/Test_WES_BQSR \
+    -- \
+    --sparkRunner <sparkrunner> \
+    --sparkMaster <sparkmaster> \
+    --executor-cores <num_cores> \
+    --executor-memory <exec_mem> \
+    --driver-memory <driver_mem>

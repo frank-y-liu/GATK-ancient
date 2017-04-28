@@ -1,0 +1,10 @@
+$GATK_HOME/gatk-launch \
+    CountReadsSpark \
+    -I $HDFS_INPUT/WGS-G94982-NA12878.bam \
+    -O $HDFS_OUTPUT/Test_WGS_ReadsCount \
+    -- \
+    --sparkRunner <sparkrunner> \
+    --sparkMaster <sparkmaster> \
+    --executor-cores <num_cores> \
+    --executor-memory <exec_mem> \
+    --driver-memory <driver_mem>

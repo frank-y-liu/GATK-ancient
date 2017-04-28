@@ -1,0 +1,16 @@
+## Note the interval file is located in the same directory where the script is
+## 
+## An earlier test showed the GATK4 couldn't find the interval list if it's located in HDFS
+## The problem might have been solved.
+ 
+$GATK_HOME/gatk-launch \
+    CountReadsSpark \
+    -I $HDFS_INPUT/WGS-G94982-NA12878.bam \
+    -L Broad.human.exome.b37.interval_list \
+    -O $HDFS_OUTPUT/Test_WES_ReadsCount \
+    -- \
+    --sparkRunner <sparkrunner> \
+    --sparkMaster <sparkmaster> \
+    --executor-cores <num_cores> \
+    --executor-memory <exec_mem> \
+    --driver-memory <driver_mem>

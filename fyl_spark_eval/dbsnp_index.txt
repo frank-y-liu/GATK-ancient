@@ -1,0 +1,18 @@
+For GATK4, the known SNP file (dbsnp) should be compressed and indexed. It is OK to use unindexed
+dbsnp file. However GATK4 will issue a warning on possible poor performance. To index the dbsnp
+file, tabix (part of samtools suite) should be used. The source code of tabix is on github:
+
+https://github.com/samtools/tabix
+
+The input dbsnp file in vcf format should be sorted first (The file provided by Broad is already
+sorted). It should first be compressed using bgzip, which will create a file with extension of .gz,
+then indexed using tabix:
+
+$TABIX_BIN/bgzip dbsnp_138.b37.excluding_sites_after_129.vcf
+$TABIX_BIN/tabix -p vcf dbsnp_138.b37.excluding_sites_after_129.vcf.gz
+
+The two files:
+  dbsnp_138.b37.excluding_sites_after_129.vcf.gz
+  dbsnp_138.b37.excluding_sites_after_129.vcf.gz.tbi 
+should be in the same directory. GATK4 derives the location of the index file from the .vcf.gz file.
+
